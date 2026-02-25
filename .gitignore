@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Node / Next
+node_modules/
+dashboard/node_modules/
+dashboard/.next/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Generated assets
+supabase/backfill_legacy.sql
+*.log
+
+# OS
+.DS_Store

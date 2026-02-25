@@ -1,0 +1,2 @@
+CRON_TZ=Asia/Seoul
+0 19 * * * flock -n /tmp/data_uploader.lock /opt/data-ops/run_daily_upload.sh >> /var/log/data_uploader.log 2>&1
