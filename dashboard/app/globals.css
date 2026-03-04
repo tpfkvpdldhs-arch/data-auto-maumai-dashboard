@@ -199,3 +199,42 @@ button.secondary {
   color: var(--ok);
   font-size: 13px;
 }
+
+.detail-block {
+  margin-top: 12px;
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+}
+
+.detail-block summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.detail-block[open] summary {
+  margin-bottom: 8px;
+}
+
+.tooltip-box {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 6px 16px rgba(18, 50, 71, 0.12);
+  padding: 10px 12px;
+  min-width: 180px;
+}
+
+.tooltip-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
