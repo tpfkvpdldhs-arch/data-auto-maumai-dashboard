@@ -78,3 +78,11 @@ export type OverrideRow = {
   note: string | null;
   updated_at: string;
 };
+
+export type ScenarioOverrideRow = {
+  map_segment: string;
+  scenario_code: string;
+  note: string | null;
+  is_active: boolean;
+  updated_at: string;
+};

@@ -4,9 +4,16 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
-import type { OverrideRow } from "@/lib/types";
+import type { OverrideRow, ScenarioOverrideRow } from "@/lib/types";
 
 type WorkerOption = { id: string };
+
+type UnknownScenarioCandidate = {
+  map_segment: string;
+  records: number;
+  data_seconds: number;
+  data_hours: number;
+};
 
 function toDateInput(value: Date): string {
   return value.toISOString().slice(0, 10);
@@ -18,6 +25,8 @@ export default function AdminOverridesClient() {
   const [token, setToken] = useState("");
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
   const [items, setItems] = useState<OverrideRow[]>([]);
+  const [scenarioItems, setScenarioItems] = useState<ScenarioOverrideRow[]>([]);
+  const [unknownCandidates, setUnknownCandidates] = useState<UnknownScenarioCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,6 +36,13 @@ export default function AdminOverridesClient() {
     work_date: toDateInput(new Date()),
     work_hours: "8.0",
     note: "",
+  }));
+
+  const [scenarioForm, setScenarioForm] = useState(() => ({
+    map_segment: "",
+    scenario_code: "",
+    note: "",
+    is_active: true,
   }));
 
   const [range, setRange] = useState(() => {
@@ -93,6 +109,40 @@ export default function AdminOverridesClient() {
     }
   }
 
+  async function loadScenarioOverrides() {
+    if (!token) {
+      setError("관리자 토큰을 입력하세요.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+
+    try {
+      const response = await fetch("/api/scenario-overrides?unknown_days=30&unknown_limit=20", {
+        headers: {
+          "x-admin-token": token,
+        },
+      });
+      const body = (await response.json()) as {
+        items?: ScenarioOverrideRow[];
+        unknown_candidates?: UnknownScenarioCandidate[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(body.error ?? `failed to fetch scenario overrides (${response.status})`);
+      }
+      setScenarioItems(body.items ?? []);
+      setUnknownCandidates(body.unknown_candidates ?? []);
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function saveOverride(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token) {
@@ -128,6 +178,42 @@ export default function AdminOverridesClient() {
     }
   }
 
+  async function saveScenarioOverride(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token) {
+      setError("관리자 토큰을 입력하세요.");
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/scenario-overrides", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": token,
+        },
+        body: JSON.stringify({
+          map_segment: scenarioForm.map_segment,
+          scenario_code: scenarioForm.scenario_code,
+          note: scenarioForm.note,
+          is_active: scenarioForm.is_active,
+        }),
+      });
+      const body = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? `failed to save scenario override (${response.status})`);
+      }
+      setMessage("시나리오 규칙이 저장되었습니다.");
+      await loadScenarioOverrides();
+      setScenarioForm((prev) => ({ ...prev, map_segment: "", scenario_code: "", note: "" }));
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
+    }
+  }
+
   async function deleteOverride(workerId: string, workDate: string) {
     if (!token) {
       setError("관리자 토큰을 입력하세요.");
@@ -154,12 +240,38 @@ export default function AdminOverridesClient() {
     }
   }
 
+  async function deleteScenarioOverride(mapSegment: string) {
+    if (!token) {
+      setError("관리자 토큰을 입력하세요.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/scenario-overrides", {
+        method: "DELETE",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": token,
+        },
+        body: JSON.stringify({ map_segment: mapSegment }),
+      });
+      const body = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? `failed to delete scenario override (${response.status})`);
+      }
+      setMessage("시나리오 규칙이 삭제되었습니다.");
+      await loadScenarioOverrides();
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
+    }
+  }
+
   return (
     <div className="container">
       <header className="page-header">
         <div>
-          <h1 className="page-title">작업시간 오버라이드 관리</h1>
-          <p className="page-subtitle">기본 8h를 특정 작업자/일자에 대해 예외 설정합니다.</p>
+          <h1 className="page-title">작업시간/시나리오 오버라이드 관리</h1>
+          <p className="page-subtitle">작업시간 예외와 map_segment 기반 시나리오 수동 규칙을 관리합니다.</p>
         </div>
         <Link href="/">대시보드로 돌아가기</Link>
       </header>
@@ -195,9 +307,15 @@ export default function AdminOverridesClient() {
             />
           </div>
           <div>
-            <label>조회</label>
+            <label>작업시간 조회</label>
             <button type="button" onClick={() => void loadOverrides()} disabled={loading}>
-              {loading ? "조회 중..." : "오버라이드 조회"}
+              {loading ? "조회 중..." : "작업시간 오버라이드 조회"}
+            </button>
+          </div>
+          <div>
+            <label>시나리오 조회</label>
+            <button type="button" onClick={() => void loadScenarioOverrides()} disabled={loading}>
+              {loading ? "조회 중..." : "시나리오 규칙 조회"}
             </button>
           </div>
         </div>
@@ -206,7 +324,7 @@ export default function AdminOverridesClient() {
       </section>
 
       <section className="card" style={{ marginBottom: 14 }}>
-        <h2 className="chart-title">오버라이드 등록/수정</h2>
+        <h2 className="chart-title">작업시간 오버라이드 등록/수정</h2>
         <form onSubmit={saveOverride} className="filters">
           <div>
             <label htmlFor="worker">작업자</label>
@@ -259,8 +377,64 @@ export default function AdminOverridesClient() {
         </form>
       </section>
 
-      <section className="card">
-        <h2 className="chart-title">오버라이드 목록</h2>
+      <section className="card" style={{ marginBottom: 14 }}>
+        <h2 className="chart-title">시나리오 규칙 등록/수정</h2>
+        <form onSubmit={saveScenarioOverride} className="filters">
+          <div>
+            <label htmlFor="map-segment">map_segment</label>
+            <input
+              id="map-segment"
+              type="text"
+              value={scenarioForm.map_segment}
+              onChange={(event) => setScenarioForm((prev) => ({ ...prev, map_segment: event.target.value }))}
+              placeholder="예: foo_bar_segment"
+            />
+          </div>
+          <div>
+            <label htmlFor="scenario-code">scenario_code</label>
+            <input
+              id="scenario-code"
+              type="text"
+              value={scenarioForm.scenario_code}
+              onChange={(event) => setScenarioForm((prev) => ({ ...prev, scenario_code: event.target.value }))}
+              placeholder="예: mowing"
+            />
+          </div>
+          <div>
+            <label htmlFor="scenario-note">메모</label>
+            <input
+              id="scenario-note"
+              type="text"
+              value={scenarioForm.note}
+              onChange={(event) => setScenarioForm((prev) => ({ ...prev, note: event.target.value }))}
+              placeholder="예: 신규 규칙"
+            />
+          </div>
+          <div>
+            <label htmlFor="scenario-active">활성</label>
+            <select
+              id="scenario-active"
+              value={scenarioForm.is_active ? "true" : "false"}
+              onChange={(event) =>
+                setScenarioForm((prev) => ({
+                  ...prev,
+                  is_active: event.target.value === "true",
+                }))
+              }
+            >
+              <option value="true">활성</option>
+              <option value="false">비활성</option>
+            </select>
+          </div>
+          <div>
+            <label>저장</label>
+            <button type="submit">시나리오 규칙 저장</button>
+          </div>
+        </form>
+      </section>
+
+      <section className="card" style={{ marginBottom: 14 }}>
+        <h2 className="chart-title">작업시간 오버라이드 목록</h2>
         <table className="table">
           <thead>
             <tr>
@@ -287,6 +461,81 @@ export default function AdminOverridesClient() {
                     onClick={() => void deleteOverride(item.worker_id, item.work_date)}
                   >
                     삭제
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card" style={{ marginBottom: 14 }}>
+        <h2 className="chart-title">시나리오 규칙 목록</h2>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>map_segment</th>
+              <th>scenario_code</th>
+              <th>활성</th>
+              <th>메모</th>
+              <th>수정시각</th>
+              <th>액션</th>
+            </tr>
+          </thead>
+          <tbody>
+            {scenarioItems.map((item) => (
+              <tr key={item.map_segment}>
+                <td>{item.map_segment}</td>
+                <td>{item.scenario_code}</td>
+                <td>{item.is_active ? "Y" : "N"}</td>
+                <td>{item.note ?? ""}</td>
+                <td>{new Date(item.updated_at).toLocaleString("ko-KR")}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void deleteScenarioOverride(item.map_segment)}
+                  >
+                    삭제
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card">
+        <h2 className="chart-title">최근 미분류 map_segment (unknown 우선)</h2>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>map_segment</th>
+              <th>레코드 수</th>
+              <th>데이터(h)</th>
+              <th>빠른 등록</th>
+            </tr>
+          </thead>
+          <tbody>
+            {unknownCandidates.map((item) => (
+              <tr key={item.map_segment}>
+                <td>{item.map_segment}</td>
+                <td>{item.records}</td>
+                <td>{item.data_hours.toFixed(2)}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      setScenarioForm({
+                        map_segment: item.map_segment,
+                        scenario_code: "unknown",
+                        note: "unknown 후보에서 추가",
+                        is_active: true,
+                      })
+                    }
+                  >
+                    폼 채우기
                   </button>
                 </td>
               </tr>
