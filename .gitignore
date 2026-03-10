@@ -18,3 +18,5 @@ supabase/backfill_legacy.sql
 
 # OS
 .DS_Store
+.vercel
+.env*.local

@@ -31,11 +31,16 @@ supabase functions deploy ingest-worker-daily --project-ref <PROJECT_REF>
       "start_time": "2026-02-25T09:00:00+09:00",
       "end_time": "2026-02-25T09:05:00+09:00",
       "duration_sec": 300.0,
-      "map_segment": "r_road_west256_1"
+      "map_segment": "r_road_west256_1",
+      "map_name": "sim_anseong_golf_course_west256",
+      "map_code": "west256",
+      "scenario_input": "mowing"
     }
   ]
 }
 ```
+
+`map_name`, `map_code`, `scenario_input` are optional for backward compatibility.
 
 ## Token registration
 

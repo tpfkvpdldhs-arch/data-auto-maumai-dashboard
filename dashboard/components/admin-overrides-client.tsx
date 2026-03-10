@@ -39,7 +39,7 @@ export default function AdminOverridesClient() {
   }));
 
   const [scenarioForm, setScenarioForm] = useState(() => ({
-    map_segment: "",
+    match_pattern: "",
     scenario_code: "",
     note: "",
     is_active: true,
@@ -196,7 +196,7 @@ export default function AdminOverridesClient() {
           "x-admin-token": token,
         },
         body: JSON.stringify({
-          map_segment: scenarioForm.map_segment,
+          match_pattern: scenarioForm.match_pattern,
           scenario_code: scenarioForm.scenario_code,
           note: scenarioForm.note,
           is_active: scenarioForm.is_active,
@@ -208,7 +208,7 @@ export default function AdminOverridesClient() {
       }
       setMessage("시나리오 규칙이 저장되었습니다.");
       await loadScenarioOverrides();
-      setScenarioForm((prev) => ({ ...prev, map_segment: "", scenario_code: "", note: "" }));
+      setScenarioForm((prev) => ({ ...prev, match_pattern: "", scenario_code: "", note: "" }));
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
     }
@@ -240,7 +240,7 @@ export default function AdminOverridesClient() {
     }
   }
 
-  async function deleteScenarioOverride(mapSegment: string) {
+  async function deleteScenarioOverride(matchPattern: string) {
     if (!token) {
       setError("관리자 토큰을 입력하세요.");
       return;
@@ -253,7 +253,7 @@ export default function AdminOverridesClient() {
           "content-type": "application/json",
           "x-admin-token": token,
         },
-        body: JSON.stringify({ map_segment: mapSegment }),
+        body: JSON.stringify({ match_pattern: matchPattern }),
       });
       const body = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok) {
@@ -271,7 +271,7 @@ export default function AdminOverridesClient() {
       <header className="page-header">
         <div>
           <h1 className="page-title">작업시간/시나리오 오버라이드 관리</h1>
-          <p className="page-subtitle">작업시간 예외와 map_segment 기반 시나리오 수동 규칙을 관리합니다.</p>
+          <p className="page-subtitle">작업시간 예외와 map_segment 포함 패턴 기반 시나리오 수동 규칙을 관리합니다.</p>
         </div>
         <Link href="/">대시보드로 돌아가기</Link>
       </header>
@@ -379,15 +379,18 @@ export default function AdminOverridesClient() {
 
       <section className="card" style={{ marginBottom: 14 }}>
         <h2 className="chart-title">시나리오 규칙 등록/수정</h2>
+        <p className="page-subtitle" style={{ marginBottom: 12 }}>
+          대소문자는 무시되며, 여러 규칙이 맞으면 더 긴 패턴이 우선 적용됩니다.
+        </p>
         <form onSubmit={saveScenarioOverride} className="filters">
           <div>
-            <label htmlFor="map-segment">map_segment</label>
+            <label htmlFor="match-pattern">포함 패턴</label>
             <input
-              id="map-segment"
+              id="match-pattern"
               type="text"
-              value={scenarioForm.map_segment}
-              onChange={(event) => setScenarioForm((prev) => ({ ...prev, map_segment: event.target.value }))}
-              placeholder="예: foo_bar_segment"
+              value={scenarioForm.match_pattern}
+              onChange={(event) => setScenarioForm((prev) => ({ ...prev, match_pattern: event.target.value }))}
+              placeholder="예: road_west"
             />
           </div>
           <div>
@@ -474,7 +477,7 @@ export default function AdminOverridesClient() {
         <table className="table">
           <thead>
             <tr>
-              <th>map_segment</th>
+              <th>포함 패턴</th>
               <th>scenario_code</th>
               <th>활성</th>
               <th>메모</th>
@@ -484,8 +487,8 @@ export default function AdminOverridesClient() {
           </thead>
           <tbody>
             {scenarioItems.map((item) => (
-              <tr key={item.map_segment}>
-                <td>{item.map_segment}</td>
+              <tr key={item.match_pattern}>
+                <td>{item.match_pattern}</td>
                 <td>{item.scenario_code}</td>
                 <td>{item.is_active ? "Y" : "N"}</td>
                 <td>{item.note ?? ""}</td>
@@ -494,7 +497,7 @@ export default function AdminOverridesClient() {
                   <button
                     type="button"
                     className="secondary"
-                    onClick={() => void deleteScenarioOverride(item.map_segment)}
+                    onClick={() => void deleteScenarioOverride(item.match_pattern)}
                   >
                     삭제
                   </button>
@@ -507,6 +510,9 @@ export default function AdminOverridesClient() {
 
       <section className="card">
         <h2 className="chart-title">최근 미분류 map_segment (unknown 우선)</h2>
+        <p className="page-subtitle" style={{ marginBottom: 12 }}>
+          폼 채우기는 전체 문자열을 넣습니다. 저장 전에 더 짧은 공통 패턴으로 줄여도 됩니다.
+        </p>
         <table className="table">
           <thead>
             <tr>
@@ -528,7 +534,7 @@ export default function AdminOverridesClient() {
                     className="secondary"
                     onClick={() =>
                       setScenarioForm({
-                        map_segment: item.map_segment,
+                        match_pattern: item.map_segment,
                         scenario_code: "unknown",
                         note: "unknown 후보에서 추가",
                         is_active: true,

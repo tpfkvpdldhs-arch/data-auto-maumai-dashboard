@@ -28,6 +28,40 @@ function dateDaysAgo(days: number): string {
   return now.toISOString().slice(0, 10);
 }
 
+type ScenarioOverrideRule = {
+  match_pattern: string;
+  scenario_code: string;
+  note: string | null;
+  is_active: boolean;
+  updated_at: string;
+};
+
+function compareScenarioOverrideRules(
+  a: Pick<ScenarioOverrideRule, "match_pattern" | "updated_at">,
+  b: Pick<ScenarioOverrideRule, "match_pattern" | "updated_at">,
+): number {
+  const lengthDiff = b.match_pattern.length - a.match_pattern.length;
+  if (lengthDiff !== 0) return lengthDiff;
+  return Date.parse(b.updated_at) - Date.parse(a.updated_at);
+}
+
+function findScenarioOverride(
+  mapSegment: string,
+  rules: Pick<ScenarioOverrideRule, "match_pattern" | "updated_at">[],
+): Pick<ScenarioOverrideRule, "match_pattern" | "updated_at"> | null {
+  const normalizedSegment = mapSegment.toLowerCase();
+  let matchedRule: Pick<ScenarioOverrideRule, "match_pattern" | "updated_at"> | null = null;
+
+  for (const rule of rules) {
+    if (!normalizedSegment.includes(rule.match_pattern.toLowerCase())) continue;
+    if (!matchedRule || compareScenarioOverrideRules(rule, matchedRule) < 0) {
+      matchedRule = rule;
+    }
+  }
+
+  return matchedRule;
+}
+
 export async function GET(req: NextRequest) {
   const authError = verifyAdminToken(req);
   if (authError) {
@@ -45,7 +79,7 @@ export async function GET(req: NextRequest) {
 
     const overridesQuery = await supabase
       .from("scenario_overrides")
-      .select("map_segment, scenario_code, note, is_active, updated_at")
+      .select("match_pattern, scenario_code, note, is_active, updated_at")
       .order("updated_at", { ascending: false });
 
     if (overridesQuery.error) {
@@ -62,18 +96,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: sessionsQuery.error.message }, { status: 500 });
     }
 
-    const activeOverrideSet = new Set(
-      (overridesQuery.data ?? [])
-        .filter((row) => row.is_active)
-        .map((row) => String(row.map_segment ?? ""))
-        .filter(Boolean),
-    );
+    const activeOverrideRules = (overridesQuery.data ?? [])
+      .filter((row) => row.is_active)
+      .map((row) => ({
+        match_pattern: String(row.match_pattern ?? "").trim(),
+        updated_at: String(row.updated_at ?? new Date(0).toISOString()),
+      }))
+      .filter((row) => row.match_pattern)
+      .sort(compareScenarioOverrideRules);
 
     const unknownMap = new Map<string, { map_segment: string; records: number; data_seconds: number }>();
     for (const row of sessionsQuery.data ?? []) {
       const mapSegment = String(row.map_segment ?? "").trim();
       if (!mapSegment) continue;
-      if (activeOverrideSet.has(mapSegment)) continue;
+      if (findScenarioOverride(mapSegment, activeOverrideRules)) continue;
 
       if (deriveScenarioFromSegment(mapSegment) !== "unknown") continue;
 
@@ -116,32 +152,32 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = (await req.json()) as {
-      map_segment?: string;
+      match_pattern?: string;
       scenario_code?: string;
       note?: string;
       is_active?: boolean;
     };
 
-    const mapSegment = (body.map_segment ?? "").trim();
+    const matchPattern = (body.match_pattern ?? "").trim();
     const scenarioCode = (body.scenario_code ?? "").trim();
     const note = (body.note ?? "").trim();
     const isActive = body.is_active ?? true;
 
-    if (!mapSegment || !scenarioCode) {
+    if (!matchPattern || !scenarioCode) {
       return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
     }
 
     const supabase = createSupabaseAdminClient();
     const { error } = await supabase.from("scenario_overrides").upsert(
       {
-        map_segment: mapSegment,
+        match_pattern: matchPattern,
         scenario_code: scenarioCode,
         note: note || null,
         is_active: isActive,
         updated_at: new Date().toISOString(),
       },
       {
-        onConflict: "map_segment",
+        onConflict: "match_pattern",
       },
     );
 
@@ -165,15 +201,15 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const body = (await req.json()) as { map_segment?: string };
-    const mapSegment = (body.map_segment ?? "").trim();
+    const body = (await req.json()) as { match_pattern?: string };
+    const matchPattern = (body.match_pattern ?? "").trim();
 
-    if (!mapSegment) {
+    if (!matchPattern) {
       return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
     }
 
     const supabase = createSupabaseAdminClient();
-    const { error } = await supabase.from("scenario_overrides").delete().eq("map_segment", mapSegment);
+    const { error } = await supabase.from("scenario_overrides").delete().eq("match_pattern", matchPattern);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

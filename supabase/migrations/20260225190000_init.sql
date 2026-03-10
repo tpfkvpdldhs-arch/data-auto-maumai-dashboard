@@ -26,8 +26,12 @@ create table if not exists public.recording_sessions (
   end_time timestamptz not null,
   duration_sec double precision not null check (duration_sec >= 0),
   map_segment text not null default 'unknown',
+  map_name text,
   map_code text not null default 'unknown',
+  map_code_source text not null default 'derived',
+  scenario_input text,
   scenario_code text not null default 'unknown',
+  scenario_source text not null default 'derived',
   is_failed boolean not null,
   work_date date not null,
   ingested_at timestamptz not null default now(),
@@ -38,6 +42,18 @@ create table if not exists public.recording_sessions (
 create index if not exists idx_recording_sessions_work_date on public.recording_sessions(work_date);
 create index if not exists idx_recording_sessions_worker_date on public.recording_sessions(worker_id, work_date);
 create index if not exists idx_recording_sessions_map_scenario on public.recording_sessions(map_code, scenario_code);
+create index if not exists idx_recording_sessions_map_segment on public.recording_sessions(map_segment);
+
+create table if not exists public.scenario_overrides (
+  map_segment text primary key,
+  scenario_code text not null,
+  note text,
+  is_active boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_scenario_overrides_active_segment
+  on public.scenario_overrides(map_segment, is_active);
 
 create table if not exists public.worker_day_overrides (
   worker_id text not null references public.workers(worker_id) on delete cascade,
@@ -65,7 +81,7 @@ returns text
 language sql
 immutable
 as $$
-  select encode(digest(coalesce(p_token, ''), 'sha256'), 'hex');
+  select encode(extensions.digest(coalesce(p_token, ''), 'sha256'::text), 'hex');
 $$;
 
 create or replace function public.extract_map_code(p_map_segment text)
@@ -73,7 +89,7 @@ returns text
 language sql
 immutable
 as $$
-  select coalesce((regexp_match(coalesce(p_map_segment, ''), '((?:east|west)[0-9]+)'))[1], 'unknown');
+  select coalesce((regexp_match(coalesce(p_map_segment, ''), '((?:east|west|north)[0-9]+)'))[1], 'unknown');
 $$;
 
 create or replace function public.extract_scenario_code(p_map_segment text)
@@ -89,17 +105,30 @@ as $$
 $$;
 
 create or replace view public.daily_metrics as
-with grouped as (
+with sessions_enriched as (
   select
     rs.work_date,
     rs.worker_id,
     rs.map_code,
-    rs.scenario_code,
+    coalesce(so.scenario_code, rs.scenario_code) as scenario_code,
     rs.is_failed,
-    sum(rs.duration_sec)::bigint as data_seconds,
-    count(*)::integer as recording_count
+    rs.duration_sec
   from public.recording_sessions rs
-  group by rs.work_date, rs.worker_id, rs.map_code, rs.scenario_code, rs.is_failed
+  left join public.scenario_overrides so
+    on so.map_segment = rs.map_segment
+   and so.is_active = true
+),
+grouped as (
+  select
+    se.work_date,
+    se.worker_id,
+    se.map_code,
+    se.scenario_code,
+    se.is_failed,
+    sum(se.duration_sec)::bigint as data_seconds,
+    count(*)::integer as recording_count
+  from sessions_enriched se
+  group by se.work_date, se.worker_id, se.map_code, se.scenario_code, se.is_failed
 ),
 worker_day as (
   select
@@ -164,6 +193,7 @@ alter table public.worker_tokens enable row level security;
 alter table public.recording_sessions enable row level security;
 alter table public.worker_day_overrides enable row level security;
 alter table public.legacy_daily_metrics enable row level security;
+alter table public.scenario_overrides enable row level security;
 
 -- Service role is used by Edge Functions and server-side dashboard API.
 drop policy if exists "service role full access workers" on public.workers;
@@ -186,6 +216,10 @@ drop policy if exists "service role full access legacy metrics" on public.legacy
 create policy "service role full access legacy metrics"
   on public.legacy_daily_metrics for all to service_role using (true) with check (true);
 
+drop policy if exists "service role full access scenario overrides" on public.scenario_overrides;
+create policy "service role full access scenario overrides"
+  on public.scenario_overrides for all to service_role using (true) with check (true);
+
 -- Optional authenticated read for worker list (for UI labels).
 drop policy if exists "authenticated can read workers" on public.workers;
 create policy "authenticated can read workers"
@@ -201,6 +235,19 @@ create policy "admin can read overrides"
 drop policy if exists "admin can upsert overrides" on public.worker_day_overrides;
 create policy "admin can upsert overrides"
   on public.worker_day_overrides
+  for all to authenticated
+  using ((auth.jwt() ->> 'app_role') = 'admin')
+  with check ((auth.jwt() ->> 'app_role') = 'admin');
+
+drop policy if exists "admin can read scenario overrides" on public.scenario_overrides;
+create policy "admin can read scenario overrides"
+  on public.scenario_overrides
+  for select to authenticated
+  using ((auth.jwt() ->> 'app_role') = 'admin');
+
+drop policy if exists "admin can upsert scenario overrides" on public.scenario_overrides;
+create policy "admin can upsert scenario overrides"
+  on public.scenario_overrides
   for all to authenticated
   using ((auth.jwt() ->> 'app_role') = 'admin')
   with check ((auth.jwt() ->> 'app_role') = 'admin');

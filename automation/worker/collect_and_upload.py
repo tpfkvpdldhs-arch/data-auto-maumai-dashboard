@@ -11,6 +11,7 @@ import csv
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -23,6 +24,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 SUPPORTED_SOURCE_FOLDERS = {"bag", "bag_failed"}
+MAP_CODE_PATTERN = re.compile(r"(east|west|north)\d+", re.IGNORECASE)
 
 
 @dataclass
@@ -62,6 +64,14 @@ def parse_timestamp_kst(raw: str, timezone: str) -> str:
     return parsed.replace(tzinfo=ZoneInfo(timezone)).isoformat()
 
 
+def extract_map_code(map_name: str, map_segment: str) -> str:
+    for source in (map_name, map_segment):
+        matched = MAP_CODE_PATTERN.search(source or "")
+        if matched:
+            return matched.group(0).lower()
+    return "unknown"
+
+
 def parse_recording_csv(csv_path: Path, timezone: str) -> ParseResult:
     records: list[dict[str, Any]] = []
     errors: list[str] = []
@@ -76,6 +86,9 @@ def parse_recording_csv(csv_path: Path, timezone: str) -> ParseResult:
             end_time_raw = (row.get("end_time") or "").strip()
             duration_raw = (row.get("duration_sec") or "").strip()
             map_segment = (row.get("map_segment") or "unknown").strip() or "unknown"
+            map_name = (row.get("map_name") or "").strip()
+            scenario_input = (row.get("scenario_input") or "").strip()
+            map_code = (row.get("map_code") or "").strip().lower()
 
             try:
                 if source_folder not in SUPPORTED_SOURCE_FOLDERS:
@@ -91,6 +104,7 @@ def parse_recording_csv(csv_path: Path, timezone: str) -> ParseResult:
 
                 start_time = parse_timestamp_kst(start_time_raw, timezone)
                 end_time = parse_timestamp_kst(end_time_raw, timezone)
+                resolved_map_code = map_code or extract_map_code(map_name, map_segment)
 
                 records.append(
                     {
@@ -100,6 +114,9 @@ def parse_recording_csv(csv_path: Path, timezone: str) -> ParseResult:
                         "end_time": end_time,
                         "duration_sec": duration_sec,
                         "map_segment": map_segment,
+                        "map_name": map_name or None,
+                        "map_code": resolved_map_code,
+                        "scenario_input": scenario_input or None,
                     }
                 )
             except Exception as exc:  # noqa: BLE001 - keep row-level resilience

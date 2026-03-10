@@ -35,3 +35,10 @@ crontab -e
 ```bash
 ENV_FILE=/etc/data_uploader.env /opt/data-ops/run_daily_upload.sh --dry-run
 ```
+
+## CSV input compatibility
+
+`collect_and_upload.py` accepts both CSV formats:
+
+- legacy: `... ,map_segment`
+- extended: `... ,map_segment,map_name,scenario_input[,map_code]`

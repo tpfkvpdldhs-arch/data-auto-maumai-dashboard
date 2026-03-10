@@ -80,7 +80,7 @@ export type OverrideRow = {
 };
 
 export type ScenarioOverrideRow = {
-  map_segment: string;
+  match_pattern: string;
   scenario_code: string;
   note: string | null;
   is_active: boolean;
