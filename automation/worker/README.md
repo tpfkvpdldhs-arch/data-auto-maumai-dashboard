@@ -42,3 +42,6 @@ ENV_FILE=/etc/data_uploader.env /opt/data-ops/run_daily_upload.sh --dry-run
 
 - legacy: `... ,map_segment`
 - extended: `... ,map_segment,map_name,scenario_input[,map_code]`
+- integrity-aware: `... ,map_segment,map_name,scenario_input[,map_code][,integrity_ok,integrity_reason]`
+
+If `integrity_ok` is present and false-like (`false`, `0`, `no`), the row is rejected before upload.

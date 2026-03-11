@@ -52,6 +52,19 @@ class ParseRecordingCsvTests(unittest.TestCase):
         self.assertEqual(extract_map_code("", "f_outline_north16_2"), "north16")
         self.assertEqual(extract_map_code("", "unknown_segment"), "unknown")
 
+    def test_integrity_failure_row_is_rejected(self) -> None:
+        csv_path = self.write_csv(
+            """
+            source_folder,folder_sort_key,filename,start_time,end_time,duration_sec,duration_mmss,map_segment,map_name,scenario_input,integrity_ok,integrity_reason
+            bag,0,a.recording.log,2026-02-23 14:04:04.437,2026-02-23 14:11:00.715,416.278,06:56,r_road_west256_1,sim_anseong_golf_course_north16,mowing,false,npy_missing
+            """
+        )
+
+        result = parse_recording_csv(csv_path, "Asia/Seoul")
+        self.assertEqual(len(result.records), 0)
+        self.assertEqual(result.rejected_count, 1)
+        self.assertIn("integrity_check_failed", result.errors[0])
+
 
 if __name__ == "__main__":
     unittest.main()

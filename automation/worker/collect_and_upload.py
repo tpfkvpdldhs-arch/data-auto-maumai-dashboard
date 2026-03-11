@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 SUPPORTED_SOURCE_FOLDERS = {"bag", "bag_failed"}
 MAP_CODE_PATTERN = re.compile(r"(east|west|north)\d+", re.IGNORECASE)
+FALSE_LIKE_VALUES = {"0", "false", "f", "n", "no"}
 
 
 @dataclass
@@ -72,6 +73,11 @@ def extract_map_code(map_name: str, map_segment: str) -> str:
     return "unknown"
 
 
+def is_integrity_failure(raw_value: str) -> bool:
+    normalized = raw_value.strip().lower()
+    return bool(normalized) and normalized in FALSE_LIKE_VALUES
+
+
 def parse_recording_csv(csv_path: Path, timezone: str) -> ParseResult:
     records: list[dict[str, Any]] = []
     errors: list[str] = []
@@ -89,12 +95,16 @@ def parse_recording_csv(csv_path: Path, timezone: str) -> ParseResult:
             map_name = (row.get("map_name") or "").strip()
             scenario_input = (row.get("scenario_input") or "").strip()
             map_code = (row.get("map_code") or "").strip().lower()
+            integrity_ok = (row.get("integrity_ok") or "").strip()
+            integrity_reason = (row.get("integrity_reason") or "").strip()
 
             try:
                 if source_folder not in SUPPORTED_SOURCE_FOLDERS:
                     raise ValueError(f"unsupported source_folder: {source_folder}")
                 if not filename:
                     raise ValueError("empty filename")
+                if is_integrity_failure(integrity_ok):
+                    raise ValueError(f"integrity_check_failed: {integrity_reason or 'unknown_reason'}")
                 if start_time_raw.startswith("ERROR") or end_time_raw.startswith("ERROR"):
                     raise ValueError("invalid timestamp markers")
 
