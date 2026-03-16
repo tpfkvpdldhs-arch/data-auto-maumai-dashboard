@@ -5,9 +5,22 @@ LOG_DIRS=("./bag" "./bag_failed")
 OUT_CSV="recording_duration.csv"
 TZ_REGION="Asia/Seoul"
 NUMERIC_RE='^[0-9]+([.][0-9]+)?$'
+MCAP_SMALL_BYTES=1048576
 
 command -v jq >/dev/null 2>&1 || { echo "❌ jq not installed (sudo apt install -y jq)"; exit 1; }
 command -v bc >/dev/null 2>&1 || { echo "❌ bc not installed (sudo apt install -y bc)"; exit 1; }
+
+normalize_mcap_chunk_base() {
+  local chunk_name stem normalized
+  chunk_name="$(basename "$1")"
+  stem="${chunk_name%.mcap}"
+  normalized="$(printf '%s' "$stem" | sed -E 's/_[0-9]+$//')"
+  printf '%s' "$normalized"
+}
+
+file_size_bytes() {
+  stat -c %s "$1" 2>/dev/null || stat -f %z "$1" 2>/dev/null || echo 0
+}
 
 echo "source_folder,folder_sort_key,filename,start_time,end_time,duration_sec,duration_mmss,map_segment,map_name,scenario_input,integrity_ok,integrity_reason" > "$OUT_CSV"
 
@@ -76,22 +89,34 @@ for LOG_DIR in "${LOG_DIRS[@]}"; do
     mcap_dir="$LOG_DIR/$base.mcap"
     metadata_yaml=""
     mcap_chunk=""
+    mcap_total_bytes=0
+    mcap_name_match="false"
     if [[ -d "$mcap_dir" ]]; then
       [[ -f "$mcap_dir/metadata.yaml" ]] && metadata_yaml="$mcap_dir/metadata.yaml"
       mcap_files=( "$mcap_dir"/*.mcap )
       if [[ ${#mcap_files[@]} -gt 0 ]]; then
         mcap_chunk="${mcap_files[0]}"
+        for chunk in "${mcap_files[@]}"; do
+          chunk_base="$(normalize_mcap_chunk_base "$chunk")"
+          chunk_size="$(file_size_bytes "$chunk")"
+          mcap_total_bytes=$((mcap_total_bytes + chunk_size))
+          [[ "$chunk_base" == "$(basename "$mcap_dir")" ]] && mcap_name_match="true"
+        done
       fi
     fi
 
     # ✅ grep가 못 찾으면 빈 문자열로 (스크립트 중단 방지)
     start=""
     end=""
+    topic_subscription_count=0
+    log_error_count=0
     if [[ -f "$log_file" ]]; then
       start=$(grep -m 1 "Recording..." "$log_file" 2>/dev/null | sed -E 's/.*\[([0-9]+\.[0-9]+)\].*/\1/' || true)
 
       # ✅ 종료 문구가 다를 수 있어 2종류 커버 (마지막 매치 사용)
       end=$(grep "Pausing recording\.\|Stopping recording\." "$log_file" 2>/dev/null | tail -n 1 | sed -E 's/.*\[([0-9]+\.[0-9]+)\].*/\1/' || true)
+      topic_subscription_count=$(grep -c "Subscribed to topic" "$log_file" 2>/dev/null || true)
+      log_error_count=$(grep -c "ERROR" "$log_file" 2>/dev/null || true)
     fi
 
     # map_segment / map_name / scenario_input
@@ -124,8 +149,13 @@ for LOG_DIR in "${LOG_DIRS[@]}"; do
     else
       [[ -z "$metadata_yaml" ]] && integrity_issues+=("mcap_metadata_missing")
       [[ -z "$mcap_chunk" ]] && integrity_issues+=("mcap_file_missing")
+      [[ -n "$mcap_chunk" && "$mcap_name_match" != "true" ]] && integrity_issues+=("mcap_filename_mismatch")
     fi
     [[ "$map_segment" == "ERROR_JSON_NOT_FOUND" || "$map_segment" == "ERROR_MAP_EMPTY" ]] && integrity_issues+=("map_segment_missing")
+    if [[ -f "$log_file" && "$topic_subscription_count" -eq 0 && "$mcap_total_bytes" -lt "$MCAP_SMALL_BYTES" ]]; then
+      integrity_issues+=("mcap_small_without_topic_subscription")
+    fi
+    [[ -f "$log_file" && "$log_error_count" -gt 0 ]] && integrity_issues+=("log_error_detected")
 
     # 타임스탬프 없으면 ERROR_TS로 남기고 계속
     if [[ -z "${start}" || -z "${end}" || ! "$start" =~ $NUMERIC_RE || ! "$end" =~ $NUMERIC_RE ]]; then

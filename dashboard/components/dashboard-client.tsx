@@ -71,6 +71,26 @@ const EMPTY_OPTIONS: FilterOptionResponse = {
   scenarios: [],
 };
 
+function sortUnique(values: Iterable<string>): string[] {
+  return [...new Set([...values].filter(Boolean))].sort();
+}
+
+function mergeOptions(current: FilterOptionResponse, next: Partial<FilterOptionResponse>): FilterOptionResponse {
+  return {
+    workers: sortUnique([...(current.workers ?? []), ...(next.workers ?? [])]),
+    maps: sortUnique([...(current.maps ?? []), ...(next.maps ?? [])]),
+    scenarios: sortUnique([...(current.scenarios ?? []), ...(next.scenarios ?? [])]),
+  };
+}
+
+function extractOptionsFromSummary(summary: DashboardSummaryResponse): Partial<FilterOptionResponse> {
+  return {
+    workers: summary.worker.map((item) => item.worker_id),
+    maps: summary.mapScenario.map((item) => item.map_code),
+    scenarios: summary.mapScenario.map((item) => item.scenario_code),
+  };
+}
+
 function toDateInput(value: Date): string {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");
@@ -366,6 +386,10 @@ export default function DashboardClient() {
       }
       const data = (await response.json()) as DashboardSummaryResponse;
       setSummary(data);
+      setOptions((prev) => mergeOptions(prev, extractOptionsFromSummary(data)));
+      void fetchOptions().catch((fetchError) => {
+        setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
+      });
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
       setSummary(EMPTY_SUMMARY);

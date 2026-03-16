@@ -256,6 +256,18 @@ chmod 600 ~/data_uploader.env
 - `WORKER_ID`와 토큰은 작업자마다 달라야 합니다.
 - `DATA_ROOT`는 실제 데이터 폴더 위치와 같아야 합니다.
 
+환경파일이 제대로 저장됐는지 확인:
+
+```bash
+grep '^CALC_SCRIPT=' /home/worv/data_uploader.env
+```
+
+출력 예시:
+
+```text
+CALC_SCRIPT=/opt/data-ops/calc_recording_csv.sh
+```
+
 ## 7-4. 수동 테스트 (필수)
 
 먼저 dry-run:
@@ -263,6 +275,17 @@ chmod 600 ~/data_uploader.env
 ```bash
 /opt/data-ops/run_daily_upload.sh --env-file "$HOME/data_uploader.env" --dry-run
 ```
+
+CSV가 정상 생성됐는지 확인:
+
+```bash
+head -n 5 /home/worv/sim_workstation/data/recording_duration.csv
+```
+
+확인 포인트:
+- 파일이 실제로 생성되었는지
+- 헤더가 정상인지
+- `integrity_ok`, `integrity_reason` 컬럼이 보이는지
 
 실제 업로드 테스트:
 
@@ -493,6 +516,60 @@ CLI 연결 중 자주 나오는 질문:
 - `Link to existing project?` -> `Yes`
 - `Would you like to pull environment variables now?` -> `Y`
 - `File size limit exceeded (100 MB)` -> 루트가 아닌 `dashboard` 폴더에서 배포 명령 실행
+
+## 8-6. 대시보드 코드 수정 후 재배포
+
+대시보드 화면이나 API를 수정했다면, 운영 주소에 반영되도록 다시 배포해야 합니다.
+
+예:
+- `dashboard/components/*` 수정
+- `dashboard/app/api/*` 수정
+- `dashboard/app/*` 수정
+
+### A. GitHub 자동배포를 쓰는 경우
+
+가장 쉬운 방법은 코드 커밋 후 `main` 브랜치에 push 하는 것입니다.
+
+```bash
+cd "/Users/jh.kim/Documents/data-auto-maumai-dashboard"
+git add -A
+git commit -m "update dashboard"
+git push origin main
+```
+
+그 다음 확인:
+1. Vercel -> 프로젝트 -> `Deployments`
+2. 방금 커밋이 `Ready` 상태인지 확인
+3. 운영 주소 접속 후 새 기능이 반영됐는지 확인
+
+### B. 수동으로 바로 재배포하는 경우
+
+GitHub push를 기다리지 않고 바로 반영하려면:
+
+```bash
+cd "/Users/jh.kim/Documents/data-auto-maumai-dashboard/dashboard"
+npx vercel --prod
+```
+
+### C. 환경변수를 바꾼 경우
+
+대시보드 코드 수정이 아니더라도 아래 값을 바꿨다면 새 배포가 필요합니다.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ADMIN_API_TOKEN`
+
+즉, Vercel에서 환경변수를 저장한 뒤에도 기존 운영 배포에는 자동 반영되지 않습니다. 새 배포가 필요합니다.
+
+### D. 배포 후 확인
+
+1. 운영 주소 열기
+2. 브라우저 강력 새로고침
+3. 변경한 화면/필터/API가 실제 반영됐는지 확인
+
+예:
+- 맵/작업자/시나리오 필터 변경 -> 대시보드 메인 화면 확인
+- 관리자 기능 변경 -> `/admin` 확인
+- API 변경 -> `/api/health` 또는 관련 API 직접 호출 확인
 
 ---
 
