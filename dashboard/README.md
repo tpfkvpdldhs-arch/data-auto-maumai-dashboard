@@ -1,5 +1,7 @@
 # Dashboard (Next.js + Recharts)
 
+GitHub 저장소 전체 개요와 데이터 흐름 설명은 루트 [README.md](../README.md)를 먼저 참고하세요.
+
 ## Run
 
 ```bash

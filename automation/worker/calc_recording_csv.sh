@@ -10,14 +10,6 @@ MCAP_SMALL_BYTES=1048576
 command -v jq >/dev/null 2>&1 || { echo "❌ jq not installed (sudo apt install -y jq)"; exit 1; }
 command -v bc >/dev/null 2>&1 || { echo "❌ bc not installed (sudo apt install -y bc)"; exit 1; }
 
-normalize_mcap_chunk_base() {
-  local chunk_name stem normalized
-  chunk_name="$(basename "$1")"
-  stem="${chunk_name%.mcap}"
-  normalized="$(printf '%s' "$stem" | sed -E 's/_[0-9]+$//')"
-  printf '%s' "$normalized"
-}
-
 file_size_bytes() {
   stat -c %s "$1" 2>/dev/null || stat -f %z "$1" 2>/dev/null || echo 0
 }
@@ -90,17 +82,14 @@ for LOG_DIR in "${LOG_DIRS[@]}"; do
     metadata_yaml=""
     mcap_chunk=""
     mcap_total_bytes=0
-    mcap_name_match="false"
     if [[ -d "$mcap_dir" ]]; then
       [[ -f "$mcap_dir/metadata.yaml" ]] && metadata_yaml="$mcap_dir/metadata.yaml"
       mcap_files=( "$mcap_dir"/*.mcap )
       if [[ ${#mcap_files[@]} -gt 0 ]]; then
         mcap_chunk="${mcap_files[0]}"
         for chunk in "${mcap_files[@]}"; do
-          chunk_base="$(normalize_mcap_chunk_base "$chunk")"
           chunk_size="$(file_size_bytes "$chunk")"
           mcap_total_bytes=$((mcap_total_bytes + chunk_size))
-          [[ "$chunk_base" == "$(basename "$mcap_dir")" ]] && mcap_name_match="true"
         done
       fi
     fi
@@ -149,7 +138,6 @@ for LOG_DIR in "${LOG_DIRS[@]}"; do
     else
       [[ -z "$metadata_yaml" ]] && integrity_issues+=("mcap_metadata_missing")
       [[ -z "$mcap_chunk" ]] && integrity_issues+=("mcap_file_missing")
-      [[ -n "$mcap_chunk" && "$mcap_name_match" != "true" ]] && integrity_issues+=("mcap_filename_mismatch")
     fi
     [[ "$map_segment" == "ERROR_JSON_NOT_FOUND" || "$map_segment" == "ERROR_MAP_EMPTY" ]] && integrity_issues+=("map_segment_missing")
     if [[ -f "$log_file" && "$topic_subscription_count" -eq 0 && "$mcap_total_bytes" -lt "$MCAP_SMALL_BYTES" ]]; then
