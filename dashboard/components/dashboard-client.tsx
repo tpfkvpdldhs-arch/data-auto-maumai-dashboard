@@ -135,8 +135,8 @@ function iterBusinessDays(startExclusive: Date, endInclusive: Date): Date[] {
 }
 
 function getDefaultForecastEnd(today: Date): string {
-  const thisYearTarget = new Date(today.getFullYear(), 2, 20);
-  const target = today <= thisYearTarget ? thisYearTarget : new Date(today.getFullYear() + 1, 2, 20);
+  const thisYearTarget = new Date(today.getFullYear(), 3, 17);
+  const target = today <= thisYearTarget ? thisYearTarget : new Date(today.getFullYear() + 1, 3, 17);
   return toDateInput(target);
 }
 
