@@ -149,7 +149,7 @@ function createDefaultFilters(): Filters {
     workers: [],
     maps: [],
     scenarios: [],
-    baselineHours: "0",
+    baselineHours: "24.7",
     targetHours: "400",
     forecastEnd: getDefaultForecastEnd(end),
     forecastWindow: "5",
