@@ -142,11 +142,9 @@ function getDefaultForecastEnd(today: Date): string {
 
 function createDefaultFilters(): Filters {
   const end = new Date();
-  const start = new Date(end);
-  start.setDate(end.getDate() - 30);
 
   return {
-    start: toDateInput(start),
+    start: "2026-02-02",
     end: toDateInput(end),
     workers: [],
     maps: [],
