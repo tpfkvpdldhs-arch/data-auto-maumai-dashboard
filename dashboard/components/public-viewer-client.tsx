@@ -245,8 +245,8 @@ export default function PublicViewerClient({
       <section className="kpi-row public-kpi-row" style={{ marginBottom: 14 }}>
         <article className="kpi">
           <div className="label">총 데이터 시간</div>
-          <div className="value">{hours(summary.totals.total_hours)}</div>
-          <div className="small">누적선 계산 기준값 {hours(baselineHours)} 포함 시 {hours(totalWithBaseline)}</div>
+          <div className="value">{hours(totalWithBaseline)}</div>
+          <div className="small">[대시보드 구현 이전 데이터 '{fixed2(baselineHours)}' 시간 포함]</div>
         </article>
         <article className="kpi">
           <div className="label">집계 일수</div>
