@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseRouteHandlerClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
 const MAUM_DOMAIN = "@maum.ai";
 
@@ -31,9 +31,9 @@ function getEmailFromUser(user: { email?: string | null }): string | null {
   return email && email.endsWith(MAUM_DOMAIN) ? email : null;
 }
 
-export async function verifyInternalDashboardRequest(): Promise<AuthResult> {
+export async function verifyInternalDashboardRequest(request?: NextRequest): Promise<AuthResult> {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = request ? createSupabaseRouteHandlerClient(request) : createSupabaseServerClient();
     const {
       data: { user },
       error,

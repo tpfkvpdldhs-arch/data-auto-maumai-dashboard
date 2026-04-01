@@ -17,7 +17,7 @@ function normalizeBaseline(raw: unknown): string | null {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await verifyInternalDashboardRequest();
+  const auth = await verifyInternalDashboardRequest(request);
   if (!auth.ok) {
     return jsonAuthError(auth);
   }

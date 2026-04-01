@@ -16,7 +16,7 @@ function parseList(raw: string | null): string[] {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await verifyInternalDashboardRequest();
+  const auth = await verifyInternalDashboardRequest(request);
   if (!auth.ok) {
     return jsonAuthError(auth);
   }

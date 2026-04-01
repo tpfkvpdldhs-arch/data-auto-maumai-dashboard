@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
-  const auth = await verifyInternalDashboardRequest();
+  const auth = await verifyInternalDashboardRequest(request);
   if (!auth.ok) {
     return jsonAuthError(auth);
   }
