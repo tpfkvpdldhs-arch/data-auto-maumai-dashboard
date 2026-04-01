@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
 
-import { createSupabaseRouteHandlerClient, createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const MAUM_DOMAIN = "@maum.ai";
 
@@ -33,7 +33,8 @@ function getEmailFromUser(user: { email?: string | null }): string | null {
 
 export async function verifyInternalDashboardRequest(request?: NextRequest): Promise<AuthResult> {
   try {
-    const supabase = request ? createSupabaseRouteHandlerClient(request) : createSupabaseServerClient();
+    const _request = request;
+    const supabase = createSupabaseServerClient();
     const {
       data: { user },
       error,
@@ -58,11 +59,12 @@ export async function verifyInternalDashboardRequest(request?: NextRequest): Pro
   }
 }
 
-export async function requireInternalDashboardPageAccess() {
+export async function requireInternalDashboardPageAccess(nextPath = "/") {
   const auth = await verifyInternalDashboardRequest();
   if (!auth.ok) {
     if (auth.status === 401) {
-      redirect("/auth/login");
+      const target = nextPath.startsWith("/") ? nextPath : "/";
+      redirect(`/auth/login?next=${encodeURIComponent(target)}`);
     }
 
     return auth;
@@ -82,5 +84,13 @@ export function verifyPublicViewerToken(token: string | null | undefined): Token
 export function jsonAuthError(
   result: Extract<AuthResult, { ok: false }> | Extract<TokenCheckResult, { ok: false }>,
 ) {
-  return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json(
+    { error: result.error },
+    {
+      status: result.status,
+      headers: {
+        "Cache-Control": "private, no-store",
+      },
+    },
+  );
 }

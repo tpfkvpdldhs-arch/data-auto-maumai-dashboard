@@ -4,7 +4,7 @@ import { requireInternalDashboardPageAccess } from "@/lib/dashboard-access";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const auth = await requireInternalDashboardPageAccess();
+  const auth = await requireInternalDashboardPageAccess("/admin");
 
   if (!auth.ok) {
     return (
