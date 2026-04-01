@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { jsonAuthError, verifyInternalDashboardRequest } from "@/lib/dashboard-access";
+import { fetchAllDailyMetricRows } from "@/lib/metric-query";
 import { buildSummary, normalizeRows } from "@/lib/metrics";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
-const PAGE_SIZE = 1000;
+export const dynamic = "force-dynamic";
 
 function parseList(raw: string | null): string[] {
   if (!raw) return [];
@@ -14,6 +16,11 @@ function parseList(raw: string | null): string[] {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await verifyInternalDashboardRequest();
+  if (!auth.ok) {
+    return jsonAuthError(auth);
+  }
+
   try {
     const supabase = createSupabaseAdminClient();
     const params = request.nextUrl.searchParams;
@@ -24,34 +31,18 @@ export async function GET(request: NextRequest) {
     const mapCodes = parseList(params.get("maps"));
     const scenarioCodes = parseList(params.get("scenarios"));
 
-    const allRows: Record<string, unknown>[] = [];
-
-    for (let from = 0; ; from += PAGE_SIZE) {
-      let query = supabase
-        .from("all_daily_metrics")
-        .select(
-          "work_date, worker_id, map_code, scenario_code, is_failed, data_seconds, recording_count, day_work_hours, allocated_work_hours, data_source",
-        )
-        .order("work_date", { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
-
-      if (start) query = query.gte("work_date", start);
-      if (end) query = query.lte("work_date", end);
-      if (workerIds.length > 0) query = query.in("worker_id", workerIds);
-      if (mapCodes.length > 0) query = query.in("map_code", mapCodes);
-      if (scenarioCodes.length > 0) query = query.in("scenario_code", scenarioCodes);
-
-      const { data, error } = await query;
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-
-      const chunk = (data ?? []) as Record<string, unknown>[];
-      allRows.push(...chunk);
-      if (chunk.length < PAGE_SIZE) break;
+    const rowsResult = await fetchAllDailyMetricRows(supabase, {
+      start,
+      end,
+      workerIds,
+      mapCodes,
+      scenarioCodes,
+    });
+    if (rowsResult.error) {
+      return NextResponse.json({ error: rowsResult.error }, { status: 500 });
     }
 
-    const normalized = normalizeRows(allRows);
+    const normalized = normalizeRows(rowsResult.data);
     const summary = buildSummary(normalized);
 
     return NextResponse.json(summary, { status: 200 });

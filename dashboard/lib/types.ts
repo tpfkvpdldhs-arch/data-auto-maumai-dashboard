@@ -71,6 +71,45 @@ export type DashboardSummaryResponse = {
   };
 };
 
+export type PublicDailySummaryPoint = {
+  work_date: string;
+  data_seconds: number;
+  data_hours: number;
+  cumulative_hours: number;
+};
+
+export type PublicMapSummaryPoint = {
+  map_code: string;
+  data_seconds: number;
+  data_hours: number;
+  share_pct: number;
+};
+
+export type PublicScenarioSummaryPoint = {
+  scenario_code: string;
+  data_seconds: number;
+  data_hours: number;
+  share_pct: number;
+};
+
+export type PublicSummaryResponse = {
+  daily: PublicDailySummaryPoint[];
+  maps: PublicMapSummaryPoint[];
+  totals: {
+    total_hours: number;
+    total_seconds: number;
+    map_count: number;
+    work_days: number;
+  };
+};
+
+export type PublicMapDetailResponse = {
+  map_code: string;
+  total_hours: number;
+  total_seconds: number;
+  scenarios: PublicScenarioSummaryPoint[];
+};
+
 export type OverrideRow = {
   worker_id: string;
   work_date: string;

@@ -237,12 +237,18 @@ function DailyChartTooltip(props: {
   );
 }
 
-export default function DashboardClient() {
+type DashboardClientProps = {
+  currentUserEmail: string;
+};
+
+export default function DashboardClient({ currentUserEmail }: DashboardClientProps) {
   const [filters, setFilters] = useState<Filters>(() => createDefaultFilters());
   const [options, setOptions] = useState<FilterOptionResponse>(EMPTY_OPTIONS);
   const [summary, setSummary] = useState<DashboardSummaryResponse>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
 
   const mapScenarioForChart = useMemo(
     () =>
@@ -366,7 +372,8 @@ export default function DashboardClient() {
   async function fetchOptions() {
     const response = await fetch("/api/options", { cache: "no-store" });
     if (!response.ok) {
-      throw new Error(`failed to load options (${response.status})`);
+      const detail = (await response.json()) as { error?: string };
+      throw new Error(detail.error ?? `failed to load options (${response.status})`);
     }
     const data = (await response.json()) as FilterOptionResponse;
     setOptions(data);
@@ -407,6 +414,39 @@ export default function DashboardClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function copyPublicLink() {
+    setShareMessage("공개용 링크를 생성하는 중...");
+    setShareLink(null);
+    try {
+      const response = await fetch("/api/public-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          start: filters.start,
+          end: filters.end,
+          baselineHours: filters.baselineHours,
+        }),
+      });
+
+      const body = (await response.json()) as { url?: string; error?: string };
+      if (!response.ok || !body.url) {
+        throw new Error(body.error ?? `failed to create public link (${response.status})`);
+      }
+
+      setShareLink(body.url);
+      try {
+        await navigator.clipboard.writeText(body.url);
+        setShareMessage("공개용 링크를 복사했습니다.");
+      } catch (_error) {
+        setShareMessage("링크 생성은 완료됐지만 자동 복사에는 실패했습니다.");
+      }
+    } catch (shareError) {
+      setShareMessage(shareError instanceof Error ? shareError.message : "Unknown error");
+    }
+  }
+
   const qualityChartData = [
     { name: "유효", value: summary.quality.valid_hours, fill: "#23a36a" },
     { name: "실패", value: summary.quality.failed_hours, fill: "#d44b5a" },
@@ -417,10 +457,29 @@ export default function DashboardClient() {
       <header className="page-header">
         <div>
           <h1 className="page-title">데이터 수집 자동 집계 대시보드</h1>
-          <p className="page-subtitle">Supabase 기반 중앙 모니터링 · 집계 기준 시간대: Asia/Seoul</p>
+          <p className="page-subtitle">
+            Supabase 기반 중앙 모니터링 · 집계 기준 시간대: Asia/Seoul · 로그인 계정 {currentUserEmail}
+          </p>
         </div>
-        <Link href="/admin">관리자 오버라이드 설정</Link>
+        <div className="page-actions">
+          <button type="button" className="secondary" onClick={() => void copyPublicLink()}>
+            공개용 링크 복사
+          </button>
+          <Link href="/auth/logout">로그아웃</Link>
+          <Link href="/admin">관리자 오버라이드 설정</Link>
+        </div>
       </header>
+
+      {shareMessage ? (
+        <section className="card" style={{ marginBottom: 14 }}>
+          <p className={shareLink ? "success" : "small"}>{shareMessage}</p>
+          {shareLink ? (
+            <div className="share-link-box">
+              <input type="text" readOnly value={shareLink} />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="card" style={{ marginBottom: 14 }}>
         <div className="filters">

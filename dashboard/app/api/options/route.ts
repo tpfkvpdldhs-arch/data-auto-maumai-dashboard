@@ -1,12 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
+import { jsonAuthError, verifyInternalDashboardRequest } from "@/lib/dashboard-access";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import type { FilterOptionResponse } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await verifyInternalDashboardRequest();
+  if (!auth.ok) {
+    return jsonAuthError(auth);
+  }
+
   try {
     const supabase = createSupabaseAdminClient();
     const maps = new Set<string>();

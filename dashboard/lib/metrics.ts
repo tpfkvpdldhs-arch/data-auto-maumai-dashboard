@@ -3,6 +3,9 @@ import type {
   DashboardSummaryResponse,
   DailySummaryPoint,
   MapScenarioSummaryPoint,
+  PublicMapDetailResponse,
+  PublicSummaryResponse,
+  PublicScenarioSummaryPoint,
   WorkerSummaryPoint,
 } from "./types";
 
@@ -163,5 +166,78 @@ export function buildSummary(rows: DailyMetricRow[]): DashboardSummaryResponse {
       worker_count: new Set(rows.map((row) => row.worker_id)).size,
       work_days: orderedDayKeys.length,
     },
+  };
+}
+
+export function buildPublicSummary(rows: DailyMetricRow[]): PublicSummaryResponse {
+  const dayMap = new Map<string, number>();
+  const mapMap = new Map<string, number>();
+
+  let totalSeconds = 0;
+
+  for (const row of rows) {
+    totalSeconds += row.data_seconds;
+    dayMap.set(row.work_date, (dayMap.get(row.work_date) ?? 0) + row.data_seconds);
+    mapMap.set(row.map_code, (mapMap.get(row.map_code) ?? 0) + row.data_seconds);
+  }
+
+  const orderedDayKeys = [...dayMap.keys()].sort();
+  let cumulativeSeconds = 0;
+  const daily = orderedDayKeys.map((day) => {
+    const dataSeconds = dayMap.get(day) ?? 0;
+    cumulativeSeconds += dataSeconds;
+
+    return {
+      work_date: day,
+      data_seconds: dataSeconds,
+      data_hours: dataSeconds / 3600,
+      cumulative_hours: cumulativeSeconds / 3600,
+    };
+  });
+
+  const maps = [...mapMap.entries()]
+    .map(([mapCode, dataSeconds]) => ({
+      map_code: mapCode,
+      data_seconds: dataSeconds,
+      data_hours: dataSeconds / 3600,
+      share_pct: totalSeconds > 0 ? (dataSeconds / totalSeconds) * 100 : 0,
+    }))
+    .sort((a, b) => b.data_seconds - a.data_seconds);
+
+  return {
+    daily,
+    maps,
+    totals: {
+      total_hours: totalSeconds / 3600,
+      total_seconds: totalSeconds,
+      map_count: mapMap.size,
+      work_days: orderedDayKeys.length,
+    },
+  };
+}
+
+export function buildPublicMapDetail(mapCode: string, rows: DailyMetricRow[]): PublicMapDetailResponse {
+  const scenarioMap = new Map<string, number>();
+  let totalSeconds = 0;
+
+  for (const row of rows) {
+    totalSeconds += row.data_seconds;
+    scenarioMap.set(row.scenario_code, (scenarioMap.get(row.scenario_code) ?? 0) + row.data_seconds);
+  }
+
+  const scenarios: PublicScenarioSummaryPoint[] = [...scenarioMap.entries()]
+    .map(([scenarioCode, dataSeconds]) => ({
+      scenario_code: scenarioCode,
+      data_seconds: dataSeconds,
+      data_hours: dataSeconds / 3600,
+      share_pct: totalSeconds > 0 ? (dataSeconds / totalSeconds) * 100 : 0,
+    }))
+    .sort((a, b) => b.data_seconds - a.data_seconds);
+
+  return {
+    map_code: mapCode,
+    total_hours: totalSeconds / 3600,
+    total_seconds: totalSeconds,
+    scenarios,
   };
 }
