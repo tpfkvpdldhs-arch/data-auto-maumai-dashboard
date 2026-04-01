@@ -31,7 +31,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {auth.status === 403 ? (
           <div style={{ marginTop: 12 }}>
             <p className="error">허용되지 않은 계정입니다. @maum.ai 계정으로 다시 로그인해 주세요.</p>
-            <Link href="/auth/logout">현재 세션 로그아웃</Link>
+            <Link href="/auth/logout" prefetch={false}>
+              현재 세션 로그아웃
+            </Link>
           </div>
         ) : null}
       </section>

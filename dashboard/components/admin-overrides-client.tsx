@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
+import { fetchWithSessionRetry } from "@/lib/client-auth-fetch";
 import type { OverrideRow, ScenarioOverrideRow } from "@/lib/types";
 
 type WorkerOption = { id: string };
@@ -61,7 +62,7 @@ export default function AdminOverridesClient() {
   }, []);
 
   useEffect(() => {
-    void fetch("/api/options", { cache: "no-store" })
+    void fetchWithSessionRetry("/api/options")
       .then(async (response) => {
         if (!response.ok) throw new Error(`failed to load workers (${response.status})`);
         const data = (await response.json()) as { workers: string[] };
@@ -92,7 +93,7 @@ export default function AdminOverridesClient() {
         start: range.start,
         end: range.end,
       });
-      const response = await fetch(`/api/overrides?${params.toString()}`, {
+      const response = await fetchWithSessionRetry(`/api/overrides?${params.toString()}`, {
         headers: {
           "x-admin-token": token,
         },
@@ -121,7 +122,7 @@ export default function AdminOverridesClient() {
     window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
 
     try {
-      const response = await fetch("/api/scenario-overrides?unknown_days=30&unknown_limit=20", {
+      const response = await fetchWithSessionRetry("/api/scenario-overrides?unknown_days=30&unknown_limit=20", {
         headers: {
           "x-admin-token": token,
         },
@@ -154,7 +155,7 @@ export default function AdminOverridesClient() {
     setMessage(null);
 
     try {
-      const response = await fetch("/api/overrides", {
+      const response = await fetchWithSessionRetry("/api/overrides", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -189,7 +190,7 @@ export default function AdminOverridesClient() {
     setMessage(null);
 
     try {
-      const response = await fetch("/api/scenario-overrides", {
+      const response = await fetchWithSessionRetry("/api/scenario-overrides", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -221,7 +222,7 @@ export default function AdminOverridesClient() {
     }
 
     try {
-      const response = await fetch("/api/overrides", {
+      const response = await fetchWithSessionRetry("/api/overrides", {
         method: "DELETE",
         headers: {
           "content-type": "application/json",
@@ -247,7 +248,7 @@ export default function AdminOverridesClient() {
     }
 
     try {
-      const response = await fetch("/api/scenario-overrides", {
+      const response = await fetchWithSessionRetry("/api/scenario-overrides", {
         method: "DELETE",
         headers: {
           "content-type": "application/json",
@@ -273,7 +274,9 @@ export default function AdminOverridesClient() {
           <h1 className="page-title">작업시간/시나리오 오버라이드 관리</h1>
           <p className="page-subtitle">작업시간 예외와 map_segment 포함 패턴 기반 시나리오 수동 규칙을 관리합니다.</p>
         </div>
-        <Link href="/">대시보드로 돌아가기</Link>
+        <Link href="/" prefetch={false}>
+          대시보드로 돌아가기
+        </Link>
       </header>
 
       <section className="card" style={{ marginBottom: 14 }}>

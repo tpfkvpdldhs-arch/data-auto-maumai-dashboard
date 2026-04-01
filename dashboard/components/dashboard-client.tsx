@@ -17,6 +17,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { fetchWithSessionRetry } from "@/lib/client-auth-fetch";
 import type { DashboardSummaryResponse, FilterOptionResponse } from "@/lib/types";
 
 type Filters = {
@@ -370,7 +371,7 @@ export default function DashboardClient({ currentUserEmail }: DashboardClientPro
   }, [summary, filters.baselineHours, filters.targetHours, filters.forecastEnd, filters.forecastWindow]);
 
   async function fetchOptions() {
-    const response = await fetch("/api/options", { cache: "no-store" });
+    const response = await fetchWithSessionRetry("/api/options");
     if (!response.ok) {
       const detail = (await response.json()) as { error?: string };
       throw new Error(detail.error ?? `failed to load options (${response.status})`);
@@ -384,7 +385,7 @@ export default function DashboardClient({ currentUserEmail }: DashboardClientPro
     setError(null);
     try {
       const query = buildQuery(nextFilters);
-      const response = await fetch(`/api/summary?${query}`, { cache: "no-store" });
+      const response = await fetchWithSessionRetry(`/api/summary?${query}`);
       if (!response.ok) {
         const detail = (await response.json()) as { error?: string };
         throw new Error(detail.error ?? `failed to load summary (${response.status})`);
@@ -418,7 +419,7 @@ export default function DashboardClient({ currentUserEmail }: DashboardClientPro
     setShareMessage("공개용 링크를 생성하는 중...");
     setShareLink(null);
     try {
-      const response = await fetch("/api/public-link", {
+      const request = await fetchWithSessionRetry("/api/public-link", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -430,9 +431,9 @@ export default function DashboardClient({ currentUserEmail }: DashboardClientPro
         }),
       });
 
-      const body = (await response.json()) as { url?: string; error?: string };
-      if (!response.ok || !body.url) {
-        throw new Error(body.error ?? `failed to create public link (${response.status})`);
+      const body = (await request.json()) as { url?: string; error?: string };
+      if (!request.ok || !body.url) {
+        throw new Error(body.error ?? `failed to create public link (${request.status})`);
       }
 
       setShareLink(body.url);
@@ -465,8 +466,12 @@ export default function DashboardClient({ currentUserEmail }: DashboardClientPro
           <button type="button" className="secondary" onClick={() => void copyPublicLink()}>
             공개용 링크 복사
           </button>
-          <Link href="/auth/logout">로그아웃</Link>
-          <Link href="/admin">관리자 오버라이드 설정</Link>
+          <Link href="/auth/logout" prefetch={false}>
+            로그아웃
+          </Link>
+          <Link href="/admin" prefetch={false}>
+            관리자 오버라이드 설정
+          </Link>
         </div>
       </header>
 
