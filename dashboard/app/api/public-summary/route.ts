@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { jsonAuthError, verifyPublicViewerRequest } from "@/lib/dashboard-access";
+import { applyMapCodeAliases, fetchActiveMapCodeAliasMap } from "@/lib/map-code-aliases";
 import { fetchAllDailyMetricRows } from "@/lib/metric-query";
 import { buildPublicSummary, normalizeRows } from "@/lib/metrics";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
@@ -25,7 +26,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: rowsResult.error }, { status: 500 });
     }
 
-    const summary = buildPublicSummary(normalizeRows(rowsResult.data));
+    const aliasResult = await fetchActiveMapCodeAliasMap(supabase);
+    if (aliasResult.error) {
+      return NextResponse.json({ error: aliasResult.error }, { status: 500 });
+    }
+
+    const summary = buildPublicSummary(applyMapCodeAliases(normalizeRows(rowsResult.data), aliasResult.data));
     return NextResponse.json(summary, {
       status: 200,
       headers: {

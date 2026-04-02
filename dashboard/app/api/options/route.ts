@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { jsonAuthError, verifyInternalDashboardRequest } from "@/lib/dashboard-access";
+import { applyMapCodeAliases, fetchActiveMapCodeAliasMap } from "@/lib/map-code-aliases";
+import { normalizeRows } from "@/lib/metrics";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import type { FilterOptionResponse } from "@/lib/types";
 
@@ -15,6 +17,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = createSupabaseAdminClient();
+    const aliasResult = await fetchActiveMapCodeAliasMap(supabase);
+    if (aliasResult.error) {
+      return NextResponse.json({ error: aliasResult.error }, { status: 500 });
+    }
+
     const maps = new Set<string>();
     const scenarios = new Set<string>();
     const workers = new Set<string>();
@@ -42,11 +49,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      const rows = data ?? [];
+      const rows = applyMapCodeAliases(normalizeRows((data ?? []) as Record<string, unknown>[]), aliasResult.data);
       for (const row of rows) {
-        if (row.worker_id) workers.add(String(row.worker_id));
-        if (row.map_code) maps.add(String(row.map_code));
-        if (row.scenario_code) scenarios.add(String(row.scenario_code));
+        if (row.worker_id) workers.add(row.worker_id);
+        if (row.map_code) maps.add(row.map_code);
+        if (row.scenario_code) scenarios.add(row.scenario_code);
       }
       if (rows.length < pageSize) {
         break;

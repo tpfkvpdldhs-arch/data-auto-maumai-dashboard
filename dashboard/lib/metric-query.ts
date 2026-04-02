@@ -31,7 +31,6 @@ export async function fetchAllDailyMetricRows(
     if (filters.start) query = query.gte("work_date", filters.start);
     if (filters.end) query = query.lte("work_date", filters.end);
     if (filters.workerIds && filters.workerIds.length > 0) query = query.in("worker_id", filters.workerIds);
-    if (filters.mapCodes && filters.mapCodes.length > 0) query = query.in("map_code", filters.mapCodes);
     if (filters.scenarioCodes && filters.scenarioCodes.length > 0) query = query.in("scenario_code", filters.scenarioCodes);
 
     const { data, error } = await query;

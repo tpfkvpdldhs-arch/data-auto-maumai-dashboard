@@ -110,6 +110,14 @@ export type PublicMapDetailResponse = {
   scenarios: PublicScenarioSummaryPoint[];
 };
 
+export type MapCodeAliasRow = {
+  alias_map_code: string;
+  canonical_map_code: string;
+  note: string | null;
+  is_active: boolean;
+  updated_at: string;
+};
+
 export type OverrideRow = {
   worker_id: string;
   work_date: string;

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import { fetchWithSessionRetry } from "@/lib/client-auth-fetch";
-import type { OverrideRow, ScenarioOverrideRow } from "@/lib/types";
+import type { MapCodeAliasRow, OverrideRow, ScenarioOverrideRow } from "@/lib/types";
 
 type WorkerOption = { id: string };
 
@@ -27,6 +27,7 @@ export default function AdminOverridesClient() {
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
   const [items, setItems] = useState<OverrideRow[]>([]);
   const [scenarioItems, setScenarioItems] = useState<ScenarioOverrideRow[]>([]);
+  const [mapAliasItems, setMapAliasItems] = useState<MapCodeAliasRow[]>([]);
   const [unknownCandidates, setUnknownCandidates] = useState<UnknownScenarioCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -42,6 +43,13 @@ export default function AdminOverridesClient() {
   const [scenarioForm, setScenarioForm] = useState(() => ({
     match_pattern: "",
     scenario_code: "",
+    note: "",
+    is_active: true,
+  }));
+
+  const [mapAliasForm, setMapAliasForm] = useState(() => ({
+    alias_map_code: "",
+    canonical_map_code: "",
     note: "",
     is_active: true,
   }));
@@ -144,6 +152,35 @@ export default function AdminOverridesClient() {
     }
   }
 
+  async function loadMapAliases() {
+    if (!token) {
+      setError("관리자 토큰을 입력하세요.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+
+    try {
+      const response = await fetchWithSessionRetry("/api/map-aliases", {
+        headers: {
+          "x-admin-token": token,
+        },
+      });
+      const body = (await response.json()) as { items?: MapCodeAliasRow[]; error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? `failed to fetch map aliases (${response.status})`);
+      }
+      setMapAliasItems(body.items ?? []);
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function saveOverride(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token) {
@@ -215,6 +252,42 @@ export default function AdminOverridesClient() {
     }
   }
 
+  async function saveMapAlias(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token) {
+      setError("관리자 토큰을 입력하세요.");
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetchWithSessionRetry("/api/map-aliases", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": token,
+        },
+        body: JSON.stringify({
+          alias_map_code: mapAliasForm.alias_map_code,
+          canonical_map_code: mapAliasForm.canonical_map_code,
+          note: mapAliasForm.note,
+          is_active: mapAliasForm.is_active,
+        }),
+      });
+      const body = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? `failed to save map alias (${response.status})`);
+      }
+      setMessage("맵 alias 규칙이 저장되었습니다.");
+      await loadMapAliases();
+      setMapAliasForm((prev) => ({ ...prev, alias_map_code: "", canonical_map_code: "", note: "" }));
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
+    }
+  }
+
   async function deleteOverride(workerId: string, workDate: string) {
     if (!token) {
       setError("관리자 토큰을 입력하세요.");
@@ -267,12 +340,38 @@ export default function AdminOverridesClient() {
     }
   }
 
+  async function deleteMapAlias(aliasMapCode: string) {
+    if (!token) {
+      setError("관리자 토큰을 입력하세요.");
+      return;
+    }
+
+    try {
+      const response = await fetchWithSessionRetry("/api/map-aliases", {
+        method: "DELETE",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": token,
+        },
+        body: JSON.stringify({ alias_map_code: aliasMapCode }),
+      });
+      const body = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? `failed to delete map alias (${response.status})`);
+      }
+      setMessage("맵 alias 규칙이 삭제되었습니다.");
+      await loadMapAliases();
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
+    }
+  }
+
   return (
     <div className="container">
       <header className="page-header">
         <div>
           <h1 className="page-title">작업시간/시나리오 오버라이드 관리</h1>
-          <p className="page-subtitle">작업시간 예외와 map_segment 포함 패턴 기반 시나리오 수동 규칙을 관리합니다.</p>
+          <p className="page-subtitle">작업시간 예외, map_segment 시나리오 규칙, map_code alias 묶음을 관리합니다.</p>
         </div>
         <Link href="/" prefetch={false}>
           대시보드로 돌아가기
@@ -319,6 +418,12 @@ export default function AdminOverridesClient() {
             <label>시나리오 조회</label>
             <button type="button" onClick={() => void loadScenarioOverrides()} disabled={loading}>
               {loading ? "조회 중..." : "시나리오 규칙 조회"}
+            </button>
+          </div>
+          <div>
+            <label>맵 alias 조회</label>
+            <button type="button" onClick={() => void loadMapAliases()} disabled={loading}>
+              {loading ? "조회 중..." : "맵 alias 조회"}
             </button>
           </div>
         </div>
@@ -440,6 +545,67 @@ export default function AdminOverridesClient() {
       </section>
 
       <section className="card" style={{ marginBottom: 14 }}>
+        <h2 className="chart-title">맵 alias 등록/수정</h2>
+        <p className="page-subtitle" style={{ marginBottom: 12 }}>
+          map_code exact match 기준으로 raw 이름을 canonical 이름으로 묶습니다. 저장 시 소문자/trim 기준으로 정규화됩니다.
+        </p>
+        <form onSubmit={saveMapAlias} className="filters">
+          <div>
+            <label htmlFor="alias-map-code">alias map_code</label>
+            <input
+              id="alias-map-code"
+              type="text"
+              value={mapAliasForm.alias_map_code}
+              onChange={(event) => setMapAliasForm((prev) => ({ ...prev, alias_map_code: event.target.value }))}
+              placeholder="예: east123"
+            />
+          </div>
+          <div>
+            <label htmlFor="canonical-map-code">canonical map_code</label>
+            <input
+              id="canonical-map-code"
+              type="text"
+              value={mapAliasForm.canonical_map_code}
+              onChange={(event) =>
+                setMapAliasForm((prev) => ({ ...prev, canonical_map_code: event.target.value }))
+              }
+              placeholder="예: east12"
+            />
+          </div>
+          <div>
+            <label htmlFor="map-alias-note">메모</label>
+            <input
+              id="map-alias-note"
+              type="text"
+              value={mapAliasForm.note}
+              onChange={(event) => setMapAliasForm((prev) => ({ ...prev, note: event.target.value }))}
+              placeholder="예: 맵 명칭 변경"
+            />
+          </div>
+          <div>
+            <label htmlFor="map-alias-active">활성</label>
+            <select
+              id="map-alias-active"
+              value={mapAliasForm.is_active ? "true" : "false"}
+              onChange={(event) =>
+                setMapAliasForm((prev) => ({
+                  ...prev,
+                  is_active: event.target.value === "true",
+                }))
+              }
+            >
+              <option value="true">활성</option>
+              <option value="false">비활성</option>
+            </select>
+          </div>
+          <div>
+            <label>저장</label>
+            <button type="submit">맵 alias 저장</button>
+          </div>
+        </form>
+      </section>
+
+      <section className="card" style={{ marginBottom: 14 }}>
         <h2 className="chart-title">작업시간 오버라이드 목록</h2>
         <table className="table">
           <thead>
@@ -501,6 +667,42 @@ export default function AdminOverridesClient() {
                     type="button"
                     className="secondary"
                     onClick={() => void deleteScenarioOverride(item.match_pattern)}
+                  >
+                    삭제
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card" style={{ marginBottom: 14 }}>
+        <h2 className="chart-title">맵 alias 목록</h2>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>alias map_code</th>
+              <th>canonical map_code</th>
+              <th>활성</th>
+              <th>메모</th>
+              <th>수정시각</th>
+              <th>액션</th>
+            </tr>
+          </thead>
+          <tbody>
+            {mapAliasItems.map((item) => (
+              <tr key={item.alias_map_code}>
+                <td>{item.alias_map_code}</td>
+                <td>{item.canonical_map_code}</td>
+                <td>{item.is_active ? "Y" : "N"}</td>
+                <td>{item.note ?? ""}</td>
+                <td>{new Date(item.updated_at).toLocaleString("ko-KR")}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void deleteMapAlias(item.alias_map_code)}
                   >
                     삭제
                   </button>
