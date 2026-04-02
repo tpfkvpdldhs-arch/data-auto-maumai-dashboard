@@ -124,6 +124,7 @@ export default function PublicViewerClient({
         token,
         start: nextFilters.start,
         end: nextFilters.end,
+        _ts: String(Date.now()),
       });
       const response = await fetch(`/api/public-summary?${params.toString()}`, { cache: "no-store" });
       const body = (await response.json()) as PublicSummaryResponse | { error?: string };
@@ -151,6 +152,7 @@ export default function PublicViewerClient({
         start: filters.start,
         end: filters.end,
         map: mapCode,
+        _ts: String(Date.now()),
       });
       const response = await fetch(`/api/public-map-detail?${params.toString()}`, { cache: "no-store" });
       const body = (await response.json()) as PublicMapDetailResponse | { error?: string };

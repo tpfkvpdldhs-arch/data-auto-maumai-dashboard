@@ -7,6 +7,7 @@ import { buildPublicSummary, normalizeRows } from "@/lib/metrics";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   const auth = verifyPublicViewerRequest(request);
@@ -35,7 +36,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(summary, {
       status: 200,
       headers: {
-        "Cache-Control": "no-store, max-age=0",
+        "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+        "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
       },
     });
   } catch (error) {
