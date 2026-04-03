@@ -16,6 +16,13 @@ function normalizeBaseline(raw: unknown): string | null {
   return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : null;
 }
 
+function normalizeList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+}
+
 export async function POST(request: NextRequest) {
   const auth = await verifyInternalDashboardRequest(request);
   if (!auth.ok) {
@@ -32,16 +39,25 @@ export async function POST(request: NextRequest) {
       start?: string;
       end?: string;
       baselineHours?: string | number;
+      workers?: string[];
+      maps?: string[];
+      scenarios?: string[];
     };
 
     const start = normalizeDate(body.start);
     const end = normalizeDate(body.end);
     const baselineHours = normalizeBaseline(body.baselineHours);
+    const workers = normalizeList(body.workers);
+    const maps = normalizeList(body.maps);
+    const scenarios = normalizeList(body.scenarios);
 
     const params = new URLSearchParams({ token: publicToken });
     if (start) params.set("start", start);
     if (end) params.set("end", end);
     if (baselineHours) params.set("baseline", baselineHours);
+    if (workers.length) params.set("workers", workers.join(","));
+    if (maps.length) params.set("maps", maps.join(","));
+    if (scenarios.length) params.set("scenarios", scenarios.join(","));
 
     const url = `${request.nextUrl.origin}/viewer?${params.toString()}`;
     return NextResponse.json({ url }, { status: 200 });

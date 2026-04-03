@@ -428,6 +428,9 @@ export default function DashboardClient({ currentUserEmail }: DashboardClientPro
           start: filters.start,
           end: filters.end,
           baselineHours: filters.baselineHours,
+          workers: filters.workers,
+          maps: filters.maps,
+          scenarios: filters.scenarios,
         }),
       });
 

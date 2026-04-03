@@ -110,6 +110,15 @@ export type PublicMapDetailResponse = {
   scenarios: PublicScenarioSummaryPoint[];
 };
 
+export type PublicViewerFilters = {
+  start: string;
+  end: string;
+  workers: string[];
+  maps: string[];
+  scenarios: string[];
+  baselineHours: number;
+};
+
 export type MapCodeAliasRow = {
   alias_map_code: string;
   canonical_map_code: string;

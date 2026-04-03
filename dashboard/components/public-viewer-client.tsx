@@ -14,18 +14,11 @@ import {
   YAxis,
 } from "recharts";
 
-import type { PublicMapDetailResponse, PublicSummaryResponse } from "@/lib/types";
+import type { PublicMapDetailResponse, PublicSummaryResponse, PublicViewerFilters } from "@/lib/types";
 
 type PublicViewerClientProps = {
   token: string;
-  initialStart: string;
-  initialEnd: string;
-  baselineHours: number;
-};
-
-type ViewerFilters = {
-  start: string;
-  end: string;
+  initialFilters: PublicViewerFilters;
 };
 
 type PublicDailyChartPoint = {
@@ -90,11 +83,9 @@ function dailyTooltip(props: TooltipProps<number, string>) {
 
 export default function PublicViewerClient({
   token,
-  initialStart,
-  initialEnd,
-  baselineHours,
+  initialFilters,
 }: PublicViewerClientProps) {
-  const [filters, setFilters] = useState<ViewerFilters>({ start: initialStart, end: initialEnd });
+  const [summaryFilters] = useState<PublicViewerFilters>(initialFilters);
   const [summary, setSummary] = useState<PublicSummaryResponse>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,20 +94,18 @@ export default function PublicViewerClient({
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  const defaultFilters = useMemo(() => ({ start: initialStart, end: initialEnd }), [initialEnd, initialStart]);
-
   const dailyChartData = useMemo(
     () =>
       summary.daily.map((item) => ({
         work_date: item.work_date,
         label: formatMonthDay(item.work_date),
         data_hours: item.data_hours,
-        cumulative_hours: item.cumulative_hours + baselineHours,
+        cumulative_hours: item.cumulative_hours + summaryFilters.baselineHours,
       })),
-    [baselineHours, summary.daily],
+    [summary.daily, summaryFilters.baselineHours],
   );
 
-  async function fetchSummary(nextFilters: ViewerFilters) {
+  async function fetchSummary(nextFilters: PublicViewerFilters) {
     setLoading(true);
     setError(null);
     try {
@@ -124,8 +113,12 @@ export default function PublicViewerClient({
         token,
         start: nextFilters.start,
         end: nextFilters.end,
+        baseline: String(nextFilters.baselineHours),
         _ts: String(Date.now()),
       });
+      if (nextFilters.workers.length) params.set("workers", nextFilters.workers.join(","));
+      if (nextFilters.maps.length) params.set("maps", nextFilters.maps.join(","));
+      if (nextFilters.scenarios.length) params.set("scenarios", nextFilters.scenarios.join(","));
       const response = await fetch(`/api/public-summary?${params.toString()}`, { cache: "no-store" });
       const body = (await response.json()) as PublicSummaryResponse | { error?: string };
       if (!response.ok) {
@@ -149,11 +142,14 @@ export default function PublicViewerClient({
     try {
       const params = new URLSearchParams({
         token,
-        start: filters.start,
-        end: filters.end,
+        start: summaryFilters.start,
+        end: summaryFilters.end,
         map: mapCode,
+        baseline: String(summaryFilters.baselineHours),
         _ts: String(Date.now()),
       });
+      if (summaryFilters.workers.length) params.set("workers", summaryFilters.workers.join(","));
+      if (summaryFilters.scenarios.length) params.set("scenarios", summaryFilters.scenarios.join(","));
       const response = await fetch(`/api/public-map-detail?${params.toString()}`, { cache: "no-store" });
       const body = (await response.json()) as PublicMapDetailResponse | { error?: string };
       if (!response.ok) {
@@ -168,7 +164,7 @@ export default function PublicViewerClient({
   }
 
   useEffect(() => {
-    void fetchSummary(filters);
+    void fetchSummary(summaryFilters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -185,8 +181,7 @@ export default function PublicViewerClient({
     return Math.max(240, count * 36);
   }, [mapDetail?.scenarios.length]);
 
-  const totalWithBaseline = summary.totals.total_hours + baselineHours;
-  const todayText = useMemo(() => toDateInput(new Date()), []);
+  const totalWithBaseline = summary.totals.total_hours + summaryFilters.baselineHours;
 
   return (
     <div className="container">
@@ -198,48 +193,11 @@ export default function PublicViewerClient({
       </header>
 
       <section className="card" style={{ marginBottom: 14 }}>
-        <div className="filters public-filters">
-          <div>
-            <label htmlFor="public-start-date">시작일</label>
-            <input
-              id="public-start-date"
-              type="date"
-              value={filters.start}
-              onChange={(event) => setFilters((prev) => ({ ...prev, start: event.target.value }))}
-            />
-          </div>
-          <div>
-            <label htmlFor="public-end-date">종료일</label>
-            <input
-              id="public-end-date"
-              type="date"
-              max={todayText}
-              value={filters.end}
-              onChange={(event) => setFilters((prev) => ({ ...prev, end: event.target.value }))}
-            />
-          </div>
-          <div>
-            <label>조회</label>
-            <button type="button" onClick={() => void fetchSummary(filters)} disabled={loading}>
-              {loading ? "불러오는 중..." : "기간 적용"}
-            </button>
-          </div>
-          <div>
-            <label>초기화</label>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                setFilters(defaultFilters);
-                void fetchSummary(defaultFilters);
-              }}
-            >
-              기본값으로 초기화
-            </button>
-          </div>
-        </div>
+        <p className="small">
+          내부 대시보드에서 선택한 필터가 고정 적용된 읽기 전용 공유 링크입니다. 날짜, 작업자, 맵, 시나리오 조건은 이 화면에서 변경할 수 없습니다.
+        </p>
         <p className="small" style={{ marginTop: 8 }}>
-          공개용 뷰에서는 기간만 변경할 수 있습니다. 맵별 상세는 아래 목록에서 선택해 확인합니다.
+          적용 기간: {summaryFilters.start} ~ {summaryFilters.end}
         </p>
         {error ? <p className="error">{error}</p> : null}
       </section>
@@ -248,7 +206,7 @@ export default function PublicViewerClient({
         <article className="kpi">
           <div className="label">총 데이터 시간</div>
           <div className="value">{hours(totalWithBaseline)}</div>
-          <div className="small">[대시보드 구현 이전 데이터 '{fixed2(baselineHours)}' 시간 포함]</div>
+          <div className="small">[대시보드 구현 이전 데이터 '{fixed2(summaryFilters.baselineHours)}' 시간 포함]</div>
         </article>
         <article className="kpi">
           <div className="label">집계 일수</div>
@@ -326,7 +284,7 @@ export default function PublicViewerClient({
                   {selectedMap} 시나리오별 요약
                 </h2>
                 <p className="small">
-                  기간 {filters.start} ~ {filters.end}
+                  기간 {summaryFilters.start} ~ {summaryFilters.end}
                 </p>
               </div>
               <button type="button" className="secondary modal-close" onClick={() => setSelectedMap(null)}>

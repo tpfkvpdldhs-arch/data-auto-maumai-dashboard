@@ -1,5 +1,6 @@
 import PublicViewerClient from "@/components/public-viewer-client";
 import { verifyPublicViewerToken } from "@/lib/dashboard-access";
+import type { PublicViewerFilters } from "@/lib/types";
 
 type ViewerPageProps = {
   searchParams?: {
@@ -7,6 +8,9 @@ type ViewerPageProps = {
     start?: string;
     end?: string;
     baseline?: string;
+    workers?: string;
+    maps?: string;
+    scenarios?: string;
   };
 };
 
@@ -24,6 +28,14 @@ function normalizeDate(raw: string | undefined, fallback: string) {
 function normalizeBaseline(raw: string | undefined, fallback: number) {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function normalizeList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export default function ViewerPage({ searchParams }: ViewerPageProps) {
@@ -44,16 +56,14 @@ export default function ViewerPage({ searchParams }: ViewerPageProps) {
   }
 
   const today = toDateInput(new Date());
-  const initialStart = normalizeDate(searchParams?.start, "2026-02-02");
-  const initialEnd = normalizeDate(searchParams?.end, today);
-  const baselineHours = normalizeBaseline(searchParams?.baseline, 24.7);
+  const initialFilters: PublicViewerFilters = {
+    start: normalizeDate(searchParams?.start, "2026-02-02"),
+    end: normalizeDate(searchParams?.end, today),
+    workers: normalizeList(searchParams?.workers),
+    maps: normalizeList(searchParams?.maps),
+    scenarios: normalizeList(searchParams?.scenarios),
+    baselineHours: normalizeBaseline(searchParams?.baseline, 24.7),
+  };
 
-  return (
-    <PublicViewerClient
-      token={auth.token}
-      initialStart={initialStart}
-      initialEnd={initialEnd}
-      baselineHours={baselineHours}
-    />
-  );
+  return <PublicViewerClient token={auth.token} initialFilters={initialFilters} />;
 }

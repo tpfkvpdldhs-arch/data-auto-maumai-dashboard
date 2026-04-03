@@ -9,6 +9,14 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function parseList(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export async function GET(request: NextRequest) {
   const auth = verifyPublicViewerRequest(request);
   if (!auth.ok) {
@@ -22,11 +30,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "map is required" }, { status: 400 });
     }
     const mapCode = normalizeMapCode(rawMapCode);
+    const workerIds = parseList(params.get("workers"));
+    const scenarioCodes = parseList(params.get("scenarios"));
 
     const supabase = createSupabaseAdminClient();
     const rowsResult = await fetchAllDailyMetricRows(supabase, {
       start: params.get("start"),
       end: params.get("end"),
+      workerIds,
+      scenarioCodes,
     });
     if (rowsResult.error) {
       return NextResponse.json({ error: rowsResult.error }, { status: 500 });
@@ -38,7 +50,11 @@ export async function GET(request: NextRequest) {
     }
 
     const canonicalRows = applyMapCodeAliases(normalizeRows(rowsResult.data), aliasResult.data);
-    const filteredRows = filterMetricRows(canonicalRows, { mapCodes: [mapCode] });
+    const filteredRows = filterMetricRows(canonicalRows, {
+      workerIds,
+      mapCodes: [mapCode],
+      scenarioCodes,
+    });
     const detail = buildPublicMapDetail(mapCode, filteredRows);
     return NextResponse.json(detail, {
       status: 200,
