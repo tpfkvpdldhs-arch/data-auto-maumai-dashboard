@@ -5,7 +5,13 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import { fetchWithSessionRetry } from "@/lib/client-auth-fetch";
-import type { MapCodeAliasRow, OverrideRow, ScenarioOverrideRow } from "@/lib/types";
+import type {
+  DashboardDefaultSettingsResponse,
+  DashboardDefaultSettingsRow,
+  MapCodeAliasRow,
+  OverrideRow,
+  ScenarioOverrideRow,
+} from "@/lib/types";
 
 type WorkerOption = { id: string };
 
@@ -28,6 +34,13 @@ export default function AdminOverridesClient() {
   const [items, setItems] = useState<OverrideRow[]>([]);
   const [scenarioItems, setScenarioItems] = useState<ScenarioOverrideRow[]>([]);
   const [mapAliasItems, setMapAliasItems] = useState<MapCodeAliasRow[]>([]);
+  const [dashboardDefaults, setDashboardDefaults] = useState<DashboardDefaultSettingsRow>({
+    settings_key: "global",
+    forecast_end: "2026-04-17",
+    target_hours: 400,
+    baseline_hours: 24.7,
+    updated_at: new Date(0).toISOString(),
+  });
   const [unknownCandidates, setUnknownCandidates] = useState<UnknownScenarioCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -52,6 +65,12 @@ export default function AdminOverridesClient() {
     canonical_map_code: "",
     note: "",
     is_active: true,
+  }));
+
+  const [dashboardDefaultsForm, setDashboardDefaultsForm] = useState(() => ({
+    forecast_end: "2026-04-17",
+    target_hours: "400",
+    baseline_hours: "24.7",
   }));
 
   const [range, setRange] = useState(() => {
@@ -181,6 +200,40 @@ export default function AdminOverridesClient() {
     }
   }
 
+  async function loadDashboardDefaults() {
+    if (!token) {
+      setError("관리자 토큰을 입력하세요.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+
+    try {
+      const response = await fetchWithSessionRetry("/api/dashboard-defaults", {
+        headers: {
+          "x-admin-token": token,
+        },
+      });
+      const body = (await response.json()) as DashboardDefaultSettingsResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? `failed to fetch dashboard defaults (${response.status})`);
+      }
+      setDashboardDefaults(body.item);
+      setDashboardDefaultsForm({
+        forecast_end: body.item.forecast_end,
+        target_hours: String(body.item.target_hours),
+        baseline_hours: String(body.item.baseline_hours),
+      });
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function saveOverride(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token) {
@@ -288,6 +341,47 @@ export default function AdminOverridesClient() {
     }
   }
 
+  async function saveDashboardDefaults(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token) {
+      setError("관리자 토큰을 입력하세요.");
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetchWithSessionRetry("/api/dashboard-defaults", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": token,
+        },
+        body: JSON.stringify({
+          forecast_end: dashboardDefaultsForm.forecast_end,
+          target_hours: Number(dashboardDefaultsForm.target_hours),
+          baseline_hours: Number(dashboardDefaultsForm.baseline_hours),
+        }),
+      });
+      const body = (await response.json()) as (DashboardDefaultSettingsResponse & { ok?: boolean }) & { error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? `failed to save dashboard defaults (${response.status})`);
+      }
+      if (body.item) {
+        setDashboardDefaults(body.item);
+        setDashboardDefaultsForm({
+          forecast_end: body.item.forecast_end,
+          target_hours: String(body.item.target_hours),
+          baseline_hours: String(body.item.baseline_hours),
+        });
+      }
+      setMessage("대시보드 기본값이 저장되었습니다.");
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Unknown error");
+    }
+  }
+
   async function deleteOverride(workerId: string, workDate: string) {
     if (!token) {
       setError("관리자 토큰을 입력하세요.");
@@ -371,7 +465,7 @@ export default function AdminOverridesClient() {
       <header className="page-header">
         <div>
           <h1 className="page-title">작업시간/시나리오 오버라이드 관리</h1>
-          <p className="page-subtitle">작업시간 예외, map_segment 시나리오 규칙, map_code alias 묶음을 관리합니다.</p>
+          <p className="page-subtitle">작업시간 예외, 시나리오 규칙, 맵 alias, 대시보드 기본값을 관리합니다.</p>
         </div>
         <Link href="/" prefetch={false}>
           대시보드로 돌아가기
@@ -426,9 +520,65 @@ export default function AdminOverridesClient() {
               {loading ? "조회 중..." : "맵 alias 조회"}
             </button>
           </div>
+          <div>
+            <label>기본값 조회</label>
+            <button type="button" onClick={() => void loadDashboardDefaults()} disabled={loading}>
+              {loading ? "조회 중..." : "대시보드 기본값 조회"}
+            </button>
+          </div>
         </div>
         {error ? <p className="error">{error}</p> : null}
         {message ? <p className="success">{message}</p> : null}
+      </section>
+
+      <section className="card" style={{ marginBottom: 14 }}>
+        <h2 className="chart-title">대시보드 기본값 설정</h2>
+        <p className="page-subtitle" style={{ marginBottom: 12 }}>
+          새로 열리는 내부 대시보드의 목표일/수집 목표/기준 데이터 기본값과, baseline query가 없는 공개용 viewer의 기준 데이터를 관리합니다.
+        </p>
+        <form onSubmit={saveDashboardDefaults} className="filters">
+          <div>
+            <label htmlFor="default-forecast-end">목표일</label>
+            <input
+              id="default-forecast-end"
+              type="date"
+              value={dashboardDefaultsForm.forecast_end}
+              onChange={(event) =>
+                setDashboardDefaultsForm((prev) => ({ ...prev, forecast_end: event.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label htmlFor="default-target-hours">수집 목표(h)</label>
+            <input
+              id="default-target-hours"
+              type="number"
+              min="0.1"
+              step="0.1"
+              value={dashboardDefaultsForm.target_hours}
+              onChange={(event) =>
+                setDashboardDefaultsForm((prev) => ({ ...prev, target_hours: event.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label htmlFor="default-baseline-hours">기준 데이터(h)</label>
+            <input
+              id="default-baseline-hours"
+              type="number"
+              min="0"
+              step="0.1"
+              value={dashboardDefaultsForm.baseline_hours}
+              onChange={(event) =>
+                setDashboardDefaultsForm((prev) => ({ ...prev, baseline_hours: event.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label>저장</label>
+            <button type="submit">대시보드 기본값 저장</button>
+          </div>
+        </form>
       </section>
 
       <section className="card" style={{ marginBottom: 14 }}>
@@ -603,6 +753,28 @@ export default function AdminOverridesClient() {
             <button type="submit">맵 alias 저장</button>
           </div>
         </form>
+      </section>
+
+      <section className="card" style={{ marginBottom: 14 }}>
+        <h2 className="chart-title">대시보드 기본값 현재값</h2>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>목표일</th>
+              <th>수집 목표(h)</th>
+              <th>기준 데이터(h)</th>
+              <th>수정시각</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{dashboardDefaults.forecast_end}</td>
+              <td>{Number(dashboardDefaults.target_hours).toFixed(2)}</td>
+              <td>{Number(dashboardDefaults.baseline_hours).toFixed(2)}</td>
+              <td>{new Date(dashboardDefaults.updated_at).toLocaleString("ko-KR")}</td>
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       <section className="card" style={{ marginBottom: 14 }}>

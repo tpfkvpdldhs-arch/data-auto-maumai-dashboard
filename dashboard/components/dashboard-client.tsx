@@ -18,7 +18,7 @@ import {
 } from "recharts";
 
 import { fetchWithSessionRetry } from "@/lib/client-auth-fetch";
-import type { DashboardSummaryResponse, FilterOptionResponse } from "@/lib/types";
+import type { DashboardDefaultSettingsRow, DashboardSummaryResponse, FilterOptionResponse } from "@/lib/types";
 
 type Filters = {
   start: string;
@@ -141,7 +141,7 @@ function getDefaultForecastEnd(today: Date): string {
   return toDateInput(target);
 }
 
-function createDefaultFilters(): Filters {
+function createDefaultFilters(defaultSettings: DashboardDefaultSettingsRow): Filters {
   const end = new Date();
 
   return {
@@ -150,9 +150,9 @@ function createDefaultFilters(): Filters {
     workers: [],
     maps: [],
     scenarios: [],
-    baselineHours: "24.7",
-    targetHours: "400",
-    forecastEnd: getDefaultForecastEnd(end),
+    baselineHours: String(defaultSettings.baseline_hours),
+    targetHours: String(defaultSettings.target_hours),
+    forecastEnd: defaultSettings.forecast_end || getDefaultForecastEnd(end),
     forecastWindow: "5",
   };
 }
@@ -240,10 +240,11 @@ function DailyChartTooltip(props: {
 
 type DashboardClientProps = {
   currentUserEmail: string;
+  defaultSettings: DashboardDefaultSettingsRow;
 };
 
-export default function DashboardClient({ currentUserEmail }: DashboardClientProps) {
-  const [filters, setFilters] = useState<Filters>(() => createDefaultFilters());
+export default function DashboardClient({ currentUserEmail, defaultSettings }: DashboardClientProps) {
+  const [filters, setFilters] = useState<Filters>(() => createDefaultFilters(defaultSettings));
   const [options, setOptions] = useState<FilterOptionResponse>(EMPTY_OPTIONS);
   const [summary, setSummary] = useState<DashboardSummaryResponse>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(false);
@@ -621,7 +622,7 @@ export default function DashboardClient({ currentUserEmail }: DashboardClientPro
               type="button"
               className="secondary"
               onClick={() => {
-                const resetFilters = createDefaultFilters();
+                const resetFilters = createDefaultFilters(defaultSettings);
                 setFilters(resetFilters);
                 void fetchSummary(resetFilters);
               }}

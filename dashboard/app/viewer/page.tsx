@@ -1,5 +1,7 @@
 import PublicViewerClient from "@/components/public-viewer-client";
 import { verifyPublicViewerToken } from "@/lib/dashboard-access";
+import { fetchDashboardDefaultSettings } from "@/lib/dashboard-default-settings";
+import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import type { PublicViewerFilters } from "@/lib/types";
 
 type ViewerPageProps = {
@@ -38,7 +40,7 @@ function normalizeList(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
-export default function ViewerPage({ searchParams }: ViewerPageProps) {
+export default async function ViewerPage({ searchParams }: ViewerPageProps) {
   const token = typeof searchParams?.token === "string" ? searchParams.token : null;
   const auth = verifyPublicViewerToken(token);
 
@@ -56,13 +58,15 @@ export default function ViewerPage({ searchParams }: ViewerPageProps) {
   }
 
   const today = toDateInput(new Date());
+  const supabase = createSupabaseAdminClient();
+  const settings = await fetchDashboardDefaultSettings(supabase);
   const initialFilters: PublicViewerFilters = {
     start: normalizeDate(searchParams?.start, "2026-02-02"),
     end: normalizeDate(searchParams?.end, today),
     workers: normalizeList(searchParams?.workers),
     maps: normalizeList(searchParams?.maps),
     scenarios: normalizeList(searchParams?.scenarios),
-    baselineHours: normalizeBaseline(searchParams?.baseline, 24.7),
+    baselineHours: normalizeBaseline(searchParams?.baseline, settings.data.baseline_hours),
   };
 
   return <PublicViewerClient token={auth.token} initialFilters={initialFilters} />;

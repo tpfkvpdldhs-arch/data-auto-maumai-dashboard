@@ -119,6 +119,18 @@ export type PublicViewerFilters = {
   baselineHours: number;
 };
 
+export type DashboardDefaultSettingsRow = {
+  settings_key: string;
+  forecast_end: string;
+  target_hours: number;
+  baseline_hours: number;
+  updated_at: string;
+};
+
+export type DashboardDefaultSettingsResponse = {
+  item: DashboardDefaultSettingsRow;
+};
+
 export type MapCodeAliasRow = {
   alias_map_code: string;
   canonical_map_code: string;

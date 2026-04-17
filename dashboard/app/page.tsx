@@ -1,5 +1,7 @@
 import DashboardClient from "@/components/dashboard-client";
 import { requireInternalDashboardPageAccess } from "@/lib/dashboard-access";
+import { fetchDashboardDefaultSettings } from "@/lib/dashboard-default-settings";
+import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -19,5 +21,8 @@ export default async function Page() {
     );
   }
 
-  return <DashboardClient currentUserEmail={auth.email} />;
+  const supabase = createSupabaseAdminClient();
+  const settings = await fetchDashboardDefaultSettings(supabase);
+
+  return <DashboardClient currentUserEmail={auth.email} defaultSettings={settings.data} />;
 }
