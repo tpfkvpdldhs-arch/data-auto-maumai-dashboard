@@ -49,13 +49,15 @@ function extractScenarioCode(segment: string): string {
   return "unknown";
 }
 
+const MAP_CODE_REGEX = /(?:east|west|north|south)\d+/i;
+
 function extractMapCodeFromSegment(segment: string): string {
-  const matched = segment.match(/(?:east|west|north)\d+/i);
+  const matched = segment.match(MAP_CODE_REGEX);
   return matched ? matched[0].toLowerCase() : "unknown";
 }
 
 function extractMapCodeFromMapName(mapName: string): string {
-  const matched = mapName.match(/(?:east|west|north)\d+/i);
+  const matched = mapName.match(MAP_CODE_REGEX);
   return matched ? matched[0].toLowerCase() : "unknown";
 }
 

@@ -50,6 +50,8 @@ class ParseRecordingCsvTests(unittest.TestCase):
     def test_extract_map_code_fallback(self) -> None:
         self.assertEqual(extract_map_code("sim_anseong_golf_course_east12", "r_road_west256_1"), "east12")
         self.assertEqual(extract_map_code("", "f_outline_north16_2"), "north16")
+        self.assertEqual(extract_map_code("sim_anseong_golf_course_south189", ""), "south189")
+        self.assertEqual(extract_map_code("", "r_road_south189_1"), "south189")
         self.assertEqual(extract_map_code("", "unknown_segment"), "unknown")
 
     def test_integrity_failure_row_is_rejected(self) -> None:

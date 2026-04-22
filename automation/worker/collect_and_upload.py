@@ -24,7 +24,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 SUPPORTED_SOURCE_FOLDERS = {"bag", "bag_failed"}
-MAP_CODE_PATTERN = re.compile(r"(east|west|north)\d+", re.IGNORECASE)
+MAP_CODE_PATTERN = re.compile(r"(east|west|north|south)\d+", re.IGNORECASE)
 FALSE_LIKE_VALUES = {"0", "false", "f", "n", "no"}
 
 
